@@ -18,3 +18,4 @@ build_installer.py
 build/
 *.spec
 ai_helper.bat
+ZL_WI/

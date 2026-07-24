@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TV Mode - ZeroLive</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%2300c853'/><stop offset='100%25' stop-color='%230091ea'/></linearGradient></defs><rect width='100' height='100' rx='20' fill='url(%23g)'/><polygon points='38,22 38,78 80,50' fill='white'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20"></script>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.7.11/dist/shaka-player.compiled.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root,[data-theme="dark"]{--bg:#0a0e14;--bg-elevated:#111720;--bg-card:#151c28;--bg-hover:#1c2536;--accent:#0B9444;--accent-glow:rgba(11,148,68,.25);--text:#e8ecf1;--text-secondary:#8899aa;--text-tertiary:#556677;--line:#1e2a3a;--live:#ef4444;--radius:14px;--shadow:0 4px 24px rgba(0,0,0,.4)}
+[data-theme="light"]{--bg:#f0f2f5;--bg-elevated:#fff;--bg-card:#fff;--bg-hover:#e8eaed;--accent:#0B9444;--text:#1a1a1a;--text-secondary:#666;--text-tertiary:#999;--line:#ddd;--live:#ef4444;--shadow:0 2px 12px rgba(0,0,0,.1)}
+[data-theme="cyberpunk"]{--bg:#0d0221;--bg-elevated:#150538;--bg-card:#1a0740;--bg-hover:#240a5c;--accent:#ff2a6d;--text:#f0e6ff;--text-secondary:#a080cc;--text-tertiary:#6a4d99;--line:#2a1050;--live:#ff2a6d;--shadow:0 4px 24px rgba(255,42,109,.2)}
+[data-theme="sunset"]{--bg:#1a0a00;--bg-elevated:#261005;--bg-card:#301508;--bg-hover:#3d1c0a;--accent:#ff6b35;--text:#ffeedd;--text-secondary:#cc9977;--text-tertiary:#886644;--line:#3d1c0a;--live:#ef4444;--shadow:0 4px 24px rgba(255,107,53,.2)}
+[data-theme="nord"]{--bg:#2e3440;--bg-elevated:#3b4252;--bg-card:#434c5e;--bg-hover:#4c566a;--accent:#88c0d0;--text:#eceff4;--text-secondary:#a0b0c0;--text-tertiary:#6a7a8a;--line:#4c566a;--live:#bf616a;--shadow:0 4px 24px rgba(0,0,0,.3)}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
+body{display:flex;flex-direction:column}
+
+/* Header */
+.tv-header{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:12px;padding:12px 20px;background:rgba(10,14,20,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--line)}
+.tv-back{display:flex;align-items:center;gap:6px;color:var(--text-secondary);text-decoration:none;font-size:13px;font-weight:600;transition:color .2s}
+.tv-back:hover{color:var(--accent)}
+.tv-back svg{width:18px;height:18px}
+.tv-logo{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;color:var(--text);text-decoration:none;letter-spacing:-.5px}
+.tv-logo svg{width:24px;height:24px}
+.tv-logo span{color:var(--accent)}
+.tv-title{font-size:14px;font-weight:700;color:var(--text);margin-left:auto;letter-spacing:.5px;text-transform:uppercase}
+.tv-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;letter-spacing:1px}
+
+/* Featured Player */
+.featured-wrap{position:relative;width:100%;max-width:1400px;margin:0 auto;aspect-ratio:16/9;background:#000;border-radius:0;overflow:hidden}
+.featured-wrap video{width:100%;height:100%;object-fit:contain;background:#000}
+.featured-info{position:absolute;bottom:0;left:0;right:0;padding:12px 16px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;align-items:center;gap:12px;z-index:5}
+.featured-teams{font-size:15px;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+.featured-meta{font-size:12px;color:rgba(255,255,255,.7)}
+.featured-empty{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--text-tertiary);font-size:16px;font-weight:600}
+
+/* Spinner */
+.tv-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;z-index:6}
+@keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+.tv-spinner.hidden{display:none}
+
+/* Grid */
+.tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;padding:8px 12px;max-width:1400px;margin:0 auto;width:100%}
+.tv-cell{position:relative;aspect-ratio:16/9;background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s}
+.tv-cell:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px var(--accent-glow)}
+.tv-cell video{width:100%;height:100%;object-fit:cover;background:#000;display:none}
+.tv-cell.loading video{display:block}
+.tv-cell.playing video{display:block}
+.tv-cell-poster{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-card);transition:opacity .2s}
+.tv-cell.loading .tv-cell-poster,.tv-cell.playing .tv-cell-poster{opacity:0;pointer-events:none}
+.tv-cell-teams{font-size:14px;font-weight:700;color:var(--text);text-align:center;line-height:1.3}
+.tv-cell-meta{font-size:11px;color:var(--text-secondary)}
+.tv-cell-source{font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;letter-spacing:.5px;background:var(--accent);color:#fff}
+.tv-cell-play{width:44px;height:44px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px var(--accent-glow);transition:transform .2s}
+.tv-cell:hover .tv-cell-play{transform:scale(1.1)}
+.tv-cell-play svg{width:18px;height:18px;fill:#fff;margin-left:2px}
+.tv-cell-close{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;opacity:0;transition:opacity .2s}
+.tv-cell:hover .tv-cell-close{opacity:1}
+.tv-cell-name{position:absolute;bottom:0;left:0;right:0;padding:6px 10px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:11px;font-weight:600;color:#fff;z-index:5;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.tv-cell-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:none;z-index:8}
+.tv-cell.loading .tv-cell-spinner{display:block}
+
+/* Empty state */
+.tv-empty{grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-tertiary)}
+.tv-empty h3{font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text-secondary)}
+.tv-empty p{font-size:13px}
+
+/* Footer */
+.tv-footer{text-align:center;padding:16px;color:var(--text-tertiary);font-size:12px;border-top:1px solid var(--line);margin-top:auto}
+
+/* Responsive */
+@media(max-width:700px){
+  .tv-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;padding:6px}
+  .tv-cell-teams{font-size:12px}
+  .tv-header{padding:10px 14px}
+}
+@media(max-width:450px){
+  .tv-grid{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<header class="tv-header">
+  <a href="/" class="tv-back">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </a>
+  <a href="/" class="tv-logo">
+    <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#00c853"/><stop offset="1" stop-color="#0091ea"/></linearGradient></defs><polygon points="9,5 9,19 19,12" fill="#fff"/></svg>
+    Zero<span>Live</span>
+  </a>
+  <div class="tv-title">TV MODE <span class="tv-badge" id="liveCount">0 LIVE</span></div>
+</header>
+
+<div class="featured-wrap" id="featuredWrap">
+  <div class="featured-empty" id="featuredEmpty">Click a stream below to start</div>
+  <video id="featuredVideo" playsinline></video>
+  <div class="tv-spinner hidden" id="featuredSpinner"></div>
+  <div class="featured-info hidden" id="featuredInfo">
+    <div class="featured-teams" id="featuredTeams"></div>
+    <div class="featured-meta" id="featuredMeta"></div>
+  </div>
+</div>
+
+<div class="tv-grid" id="tvGrid"></div>
+
+<footer class="tv-footer">ZeroLive TV Mode &mdash; Free sports streaming</footer>
+
+<script>
+(function(){
+  if(typeof shaka!=='undefined')shaka.polyfill.installAll();
+  var grid=document.getElementById('tvGrid');
+  var featuredVideo=document.getElementById('featuredVideo');
+  var featuredEmpty=document.getElementById('featuredEmpty');
+  var featuredSpinner=document.getElementById('featuredSpinner');
+  var featuredInfo=document.getElementById('featuredInfo');
+  var featuredTeams=document.getElementById('featuredTeams');
+  var featuredMeta=document.getElementById('featuredMeta');
+  var liveCount=document.getElementById('liveCount');
+  var streams=[];
+  var featuredIdx=-1;
+  var featuredPlayer=null;
+  var cellPlayers={};
+  var cellStates={};
+  var L=function(msg){try{console.log('[ZL-TV]',msg)}catch(_){}};
+
+  function normHex(h){if(!h)return'';h=h.replace(/0x/gi,'').replace(/[^a-fA-F0-9]/g,'');return h.length===32?h:h.padStart(32,'0');}
+
+  function loadStreams(){
+    fetch('/api/tv-live',{cache:'no-store'})
+      .then(function(r){return r.json()})
+      .then(function(data){
+        if(data.ok&&data.streams){
+          streams=data.streams;
+          liveCount.textContent=streams.length+' LIVE';
+          L('Got '+streams.length+' live streams');
+          renderGrid();
+          if(featuredIdx===-1&&streams.length>0){
+            promoteToFeatured(0);
+          }
+        }
+      })
+      .catch(function(e){L('Fetch failed: '+e)});
+  }
+
+  function renderGrid(){
+    var html='';
+    for(var i=0;i<streams.length;i++){
+      if(i===featuredIdx)continue;
+      var s=streams[i];
+      var state=cellStates[i]||'idle';
+      var cls='tv-cell'+(state!=='idle'?' '+state:'');
+      html+='<div class="'+cls+'" data-idx="'+i+'" onclick="window._tvCellClick('+i+')">';
+      html+='<video playsinline muted></video>';
+      html+='<div class="tv-cell-spinner"></div>';
+      html+='<div class="tv-cell-poster">';
+      html+='<div class="tv-cell-teams">'+E(s.team_a)+(s.team_b?' vs '+E(s.team_b):'')+'</div>';
+      html+='<div class="tv-cell-meta">'+E(s.sport)+(s.league?' &middot; '+E(s.league):'')+'</div>';
+      html+='<div class="tv-cell-source">'+E(s.source)+'</div>';
+      html+='<div class="tv-cell-play"><svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg></div>';
+      html+='</div>';
+      html+='<div class="tv-cell-name">'+E(s.team_a)+(s.team_b?' vs '+E(s.team_b):'')+'</div>';
+      html+='<button class="tv-cell-close" onclick="event.stopPropagation();window._tvCellClose('+i+')">&times;</button>';
+      html+='</div>';
+    }
+    if(streams.length===0||(streams.length===1&&featuredIdx===0)){
+      html='<div class="tv-empty"><h3>No live streams</h3><p>Check back when matches are live</p></div>';
+    }
+    grid.innerHTML=html;
+  }
+
+  var E=function(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];})};
+
+  window._tvCellClick=function(idx){
+    L('Cell click: '+idx);
+    destroyCellPlayer(idx);
+    promoteToFeatured(idx);
+  };
+
+  window._tvCellClose=function(idx){
+    destroyCellPlayer(idx);
+    delete cellStates[idx];
+    renderGrid();
+  };
+
+  function promoteToFeatured(idx){
+    if(idx<0||idx>=streams.length)return;
+    var s=streams[idx];
+    L('Promoting '+idx+' to featured: '+s.team_a+(s.team_b?' vs '+s.team_b:''));
+    featuredIdx=idx;
+    featuredEmpty.style.display='none';
+    featuredSpinner.classList.remove('hidden');
+    featuredInfo.classList.add('hidden');
+    featuredTeams.textContent=s.team_a+(s.team_b?' vs '+s.team_b:'');
+    featuredMeta.textContent=s.sport+(s.league?' · '+s.league:'')+' · '+s.source;
+    renderGrid();
+    loadFeaturedStream(s);
+  }
+
+  function destroyFeaturedPlayer(){
+    if(featuredPlayer){
+      try{if(featuredPlayer.destroy)featuredPlayer.destroy();else if(featuredPlayer.detachMediaElement)featuredPlayer.detachMediaElement();}catch(_){}
+      featuredPlayer=null;
+    }
+    featuredVideo.src='';
+  }
+
+  function destroyCellPlayer(idx){
+    if(cellPlayers[idx]){
+      try{if(cellPlayers[idx].destroy)cellPlayers[idx].destroy();else if(cellPlayers[idx].detachMediaElement)cellPlayers[idx].detachMediaElement();}catch(_){}
+      delete cellPlayers[idx];
+    }
+    delete cellStates[idx];
+  }
+
+  function loadFeaturedStream(s){
+    destroyFeaturedPlayer();
+    var url=s.url;
+    var isDash=s.type==='dash'||url.includes('.mpd');
+    var isHls=s.type==='hls'||url.includes('.m3u8');
+    var isMpegts=s.type==='mpegts';
+
+    if(isDash){
+      if(typeof shaka==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='Shaka Player not loaded';return;}
+      var sp=new shaka.Player();
+      featuredPlayer=sp;
+      var cfg={abr:{enabled:true},streaming:{bufferingGoal:30,rebufferingGoal:15}};
+      if(s.drm_kid&&s.drm_key){
+        var kid=normHex(s.drm_kid),key=normHex(s.drm_key);
+        cfg.drm={clearKeys:{}};cfg.drm.clearKeys[kid]=key;
+      }
+      sp.configure(cfg);
+      sp.addEventListener('error',function(e){L('Featured DASH error');});
+      var t=setTimeout(function(){
+        try{sp.destroy&&sp.destroy();}catch(_){}
+        featuredSpinner.classList.add('hidden');
+        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s);return;}
+        featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed to load';
+      },15000);
+      sp.attach(featuredVideo).then(function(){return sp.load(url);}).then(function(){
+        clearTimeout(t);featuredSpinner.classList.add('hidden');
+        featuredVideo.play().catch(function(){});
+        featuredInfo.classList.remove('hidden');
+        L('Featured DASH loaded');
+      })['catch'](function(err){
+        clearTimeout(t);
+        L('Featured DASH load failed: '+(err.message||err));
+        try{sp.destroy&&sp.destroy();}catch(_){}
+        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s);return;}
+        featuredSpinner.classList.add('hidden');
+        featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
+      });
+    }else if(isHls){
+      if(typeof Hls==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='HLS.js not loaded';return;}
+      loadFeaturedHls(url,s);
+    }else if(isMpegts){
+      if(typeof mpegts==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='mpegts.js not loaded';return;}
+      var tp=mpegts.createPlayer({type:'mpegts',isLive:true,url:url},{enableWorker:true,enableStashBuffer:true,stashInitialSize:128,liveBufferLatencyChasing:true,liveBufferLatencyMaxLatency:5});
+      tp.attachMediaElement(featuredVideo);
+      tp.load();tp.play();
+      featuredPlayer=tp;
+      featuredSpinner.classList.add('hidden');
+      featuredInfo.classList.remove('hidden');
+      featuredVideo.play().catch(function(){});
+    }else{
+      featuredVideo.src=url;
+      featuredVideo.play().catch(function(){});
+      featuredSpinner.classList.add('hidden');
+      featuredInfo.classList.remove('hidden');
+    }
+  }
+
+  function loadFeaturedHls(url,s){
+    var h=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:300,backbufferLength:60,liveSyncDuration:15,liveMaxLatencyDuration:60,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true});
+    featuredPlayer=h;
+    var done=false;
+    var t=setTimeout(function(){
+      if(done)return;
+      try{h.destroy();}catch(_){}
+      done=true;
+      if(!s._triedProxy){
+        s._triedProxy=true;
+        var pUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
+        if(s.referer)pUrl+='&referer='+encodeURIComponent(s.referer);
+        loadFeaturedHls(pUrl,s);
+      }else{
+        featuredSpinner.classList.add('hidden');
+        featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
+      }
+    },15000);
+    h.on(Hls.Events.MANIFEST_PARSED,function(){
+      clearTimeout(t);done=true;
+      featuredSpinner.classList.add('hidden');
+      featuredVideo.play().catch(function(){});
+      featuredInfo.classList.remove('hidden');
+      L('Featured HLS loaded');
+    });
+    h.on(Hls.Events.ERROR,function(e,data){
+      if(done)return;
+      if(data.fatal){clearTimeout(t);try{h.destroy();}catch(_{});done=true;
+        if(!s._triedProxy){
+          s._triedProxy=true;
+          var pUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
+          if(s.referer)pUrl+='&referer='+encodeURIComponent(s.referer);
+          loadFeaturedHls(pUrl,s);
+        }else{
+          featuredSpinner.classList.add('hidden');
+          featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
+        }
+      }
+    });
+    h.attachMedia(featuredVideo);
+    h.loadSource(url);
+  }
+
+  function loadFeaturedViaProxy(s){
+    if(s.type==='dash'||(s.url||'').includes('.mpd')){
+      var pUrl='/proxy/manifest/'+encodeURIComponent(s.slug)+'/0/';
+      loadFeaturedStream(Object.assign({},s,{url:pUrl,_triedProxy:true}));
+    }else{
+      var hlsUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
+      if(s.referer)hlsUrl+='&referer='+encodeURIComponent(s.referer);
+      loadFeaturedHls(hlsUrl,Object.assign({},s,{_triedProxy:true}));
+    }
+  }
+
+  loadStreams();
+  setInterval(loadStreams,30000);
+})();
+</script>
+</body>
+</html>

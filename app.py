@@ -146,18 +146,106 @@ _PB_TTL = 30
 _M3U_TTL = 30
 _FC_TTL = 60
 _TM_TTL = 60
-_SF_TTL = 60
-_ES_TTL = 60
+_SL_TTL = 60
 
 FC_SOURCE = 'https://raw.githubusercontent.com/srhady/Fancode-bd/refs/heads/main/main_playlist.json'
 TAPMAD_SOURCE = 'https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json'
-SF_API = 'https://streamfree.top/api/v1'
-SF_BASE = 'https://streamfree.top'
-ES_API = 'https://api.esportex.site/api'
-_fc_cache = {}  # key -> (ts, data)
+_fc_cache = {}
 _tm_cache = {}
-_sf_cache = {}
-_es_cache = {}
+_sl_cache = {}
+
+SONYLIV_SOURCE = 'https://raw.githubusercontent.com/srhady/SonyLiv/main/sonyliv_playlist.json'
+_sl_cache = {}
+_SL_TTL = 60
+
+SMSOURCE = 'https://raw.githubusercontent.com/sm-monirulislam/Upcoming-and-Live-Sports-Data/refs/heads/main/Sports_data.json'
+_sm_cache = {}
+_SM_TTL = 60
+_SM_SPORTS = {'Cricket', 'Football', 'Boxing', 'Golf', 'Tennis'}
+
+
+def _fetch_sonyliv():
+    """Fetch SonyLiv live matches — direct HLS URLs, no scraping needed."""
+    try:
+        raw = urllib.request.urlopen(SONYLIV_SOURCE, timeout=15).read().decode('utf-8')
+        data = json.loads(raw)
+        items = data.get('live_matches', []) if isinstance(data, dict) else []
+        if not items:
+            return []
+    except Exception as e:
+        _log.warning('SonyLiv fetch failed: %s', e)
+        return []
+    events = []
+    for item in items:
+        mi = item.get('match_info', {})
+        pi = item.get('playback_info', {}).get('resultObj', {})
+        video_url = pi.get('videoURL', '')
+        if not video_url:
+            continue
+        content_id = mi.get('contentId', '')
+        if not content_id:
+            continue
+        is_live = mi.get('isOnAir', False)
+        # Parse teams from episodeTitle or emfAttributes.team
+        ep_title = mi.get('episodeTitle', '')
+        emf = mi.get('emfAttributes', {})
+        team_str = emf.get('team', '')
+        if ' vs ' in ep_title:
+            parts = ep_title.split(' vs ')
+            t1 = parts[0].strip()
+            # Remove trailing " - Sport - Date" from t2
+            t2_raw = parts[1].strip()
+            t2 = t2_raw.split(' - ')[0].strip() if ' - ' in t2_raw else t2_raw
+        elif team_str:
+            parts = [x.strip() for x in team_str.split(',')]
+            t1 = parts[0] if len(parts) > 0 else 'TBD'
+            t2 = parts[1] if len(parts) > 1 else 'TBD'
+        else:
+            t1 = mi.get('title', 'TBD')
+            t2 = ''
+        genres = mi.get('genres', [])
+        sport = genres[0] if genres else 'Sports'
+        # Normalize sport names
+        sport_lower = sport.lower()
+        if 'cricket' in sport_lower:
+            sport = 'Cricket'
+        elif 'football' in sport_lower or 'soccer' in sport_lower:
+            sport = 'Football'
+        elif 'basketball' in sport_lower:
+            sport = 'Basketball'
+        elif 'tennis' in sport_lower:
+            sport = 'Tennis'
+        elif 'hockey' in sport_lower:
+            sport = 'Hockey'
+        elif 'bowls' in sport_lower:
+            sport = 'Bowls'
+        thumbnail = emf.get('landscape_thumb', '') or emf.get('thumbnail', '')
+        ev = {
+            'id': f'sl_{content_id}',
+            'enc_parent': f'sl_{content_id}',
+            'parent': f'sl_{content_id}',
+            'team_a_name': t1,
+            'team_b_name': t2,
+            'team_a_logo': thumbnail,
+            'team_b_logo': '',
+            'sport': sport,
+            'league': mi.get('title', 'SonyLiv'),
+            'title': ep_title or f'{t1} vs {t2}' if t2 else t1,
+            'status': 'LIVE' if is_live else 'UPCOMING',
+            'is_sonyliv': True,
+            'is_live': 1 if is_live else 0,
+            'streams': [
+                {
+                    'source': 'SonyLiv',
+                    'stream_url': video_url,
+                    'stream_type': 'hls',
+                    'needs_proxy': True,
+                    'referer': '',
+                }
+            ],
+        }
+        events.append(ev)
+    return events
 
 _seg_prefetch = {}       # url -> (ts, bytes, content_type)
 _SEG_PREFETCH_TTL = 45   # seconds
@@ -211,10 +299,6 @@ def _prefetch_dash_segments(mpd_text, base_url, ref=''):
         urls.append(urljoin(base_url, m.group(1)))
     if urls:
         _prefetch_segments(urls[:20], ref)
-
-_SF_CATEGORIES = ['soccer', 'cricket']
-
-_SF_QUALITY_PREF = ['720p', '1080p', '540p', '2160p']
 
 def _fetch_tapmad():
     """Fetch TapMad events and normalize."""
@@ -276,224 +360,142 @@ def _fetch_tapmad():
     return events
 
 
-def _fetch_streamfree():
-    """Fetch StreamFree events — extract real HLS URLs via token scraping."""
-    def _fetch_cat(cat):
-        try:
-            _, body = _http_get(f"{SF_API}/streams?category={cat}")
-            if not body:
-                return []
-            data = json.loads(body)
-            return data.get('streams', []) if isinstance(data, dict) else []
-        except Exception as e:
-            _log.warning('StreamFree fetch failed (%s): %s', cat, e)
-            return []
+IPTV_SOURCE = 'https://aeoncorex-lab.github.io/streamx-iptv-data/api/v1/categories/sports.json'
+_iptv_cache = {}
+_IPTV_TTL = 120  # channels rarely change
+
+
+def _fetch_iptv():
+    """Fetch IPTV sports channels and normalize into event format."""
     try:
-        with ThreadPoolExecutor(max_workers=5) as pool:
-            results = list(pool.map(_fetch_cat, _SF_CATEGORIES))
-    except Exception:
-        results = [_fetch_cat(c) for c in _SF_CATEGORIES]
-    raw_streams = []
-    for streams in results:
-        raw_streams.extend(streams)
-    if not raw_streams:
+        raw = urllib.request.urlopen(IPTV_SOURCE, timeout=15).read().decode('utf-8')
+        data = json.loads(raw)
+        channels = data.get('channels', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if not channels:
+            return []
+    except Exception as e:
+        _log.warning('IPTV fetch failed: %s', e)
         return []
-
-    def _resolve_stream(item):
-        """For one StreamFree stream: fetch embed page, extract tokens, build HLS URL."""
-        key = item.get('stream_key') or item.get('id', '')
-        if not key:
-            return None
-        embed_url = item.get('embed_url', '')
-        if not embed_url:
-            return None
-        try:
-            _, html = _http_get(embed_url)
-            if not html:
-                return None
-            m = re.search(r'const _0x\s*=\s*(\{.*?\});', html)
-            if not m:
-                return None
-            tokens = json.loads(m.group(1))
-        except Exception as e:
-            _log.debug('StreamFree token scrape failed (%s): %s', key, e)
-            return None
-        # Check stream status for available qualities
-        best_q = '720p'
-        try:
-            _, sb = _http_get(f"{SF_BASE}/api/stream-status/{key}")
-            if sb:
-                status = json.loads(sb)
-                quals = status.get('qualities', {})
-                for q in _SF_QUALITY_PREF:
-                    if quals.get(q):
-                        best_q = q
-                        break
-        except Exception:
-            pass
-        # Get server type
-        server_name = 'origin'
-        try:
-            _, kb = _http_get(f"{SF_BASE}/get-stream-key/{key}")
-            if kb:
-                kdata = json.loads(kb)
-                server_name = kdata.get('server_name', 'origin')
-        except Exception:
-            pass
-        # Build HLS URL
-        path = 'live-cdn' if server_name != 'origin' else 'live'
-        p = tokens.get(best_q) or tokens.get('720p') or next(iter(tokens.values()), None)
-        if not p:
-            return None
-        url = f"https://streamfree.top/{path}/{key}{best_q}/index.m3u8?_t={p['_t']}&_e={p['_e']}&_n={p['_n']}"
-        return {
-            'source': 'StreamFree',
-            'stream_url': url,
-            'stream_type': 'hls',
-            'needs_proxy': True,
-            'referer': 'https://streamfree.top/',
-        }
-
     events = []
-    for item in raw_streams:
-        mid = item.get('stream_key') or item.get('id', '')
-        if not mid:
+    for ch in channels:
+        ch_id = ch.get('id', '')
+        name = ch.get('name', '').strip()
+        if not name:
             continue
-        t1 = (item.get('team1') or {}).get('name', '') or 'TBD'
-        t2 = (item.get('team2') or {}).get('name', '') or 'TBD'
-        ts = item.get('match_timestamp', 0)
+        stream_urls = ch.get('streamUrls', [])
+        if not stream_urls:
+            continue
+        streams = []
+        for u in stream_urls:
+            if not u:
+                continue
+            streams.append({
+                'source': 'IPTV',
+                'stream_url': u,
+                'stream_type': 'hls',
+                'needs_proxy': True,
+                'referer': '',
+            })
+        if not streams:
+            continue
+        logo = ch.get('logoUrl', '')
         ev = {
-            'id': f'sf_{mid}',
-            'enc_parent': f'sf_{mid}',
-            'parent': f'sf_{mid}',
-            'team_a_name': t1,
-            'team_b_name': t2,
-            'team_a_logo': (item.get('team1') or {}).get('logo', ''),
-            'team_b_logo': (item.get('team2') or {}).get('logo', ''),
-            'sport': item.get('category', 'Sports'),
-            'league': 'StreamFree',
-            'title': item.get('name', f'{t1} vs {t2}'),
-            'starts_at': '',
-            'is_live': 1 if ts and (ts * 1000) <= (time.time() * 1000) else 0,
-            'is_streamfree': True,
-            'streams': [],
+            'id': f'iptv_{ch_id}',
+            'enc_parent': f'iptv_{ch_id}',
+            'parent': f'iptv_{ch_id}',
+            'team_a_name': name,
+            'team_b_name': '',
+            'team_a_logo': logo,
+            'team_b_logo': '',
+            'sport': ch.get('genre', ch.get('category', 'Sports')),
+            'league': 'IPTV',
+            'title': name,
+            'status': 'LIVE',
+            'is_iptv': True,
+            'is_live': 1,
+            'streams': streams,
         }
-        try:
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                resolved = pool.submit(_resolve_stream, item).result(timeout=10)
-            if resolved:
-                ev['streams'] = [resolved]
-        except Exception:
-            pass
-        if not ev['streams']:
-            ev['streams'] = [{'source': 'StreamFree', 'stream_url': item.get('embed_url', ''), 'stream_type': 'embed'}]
         events.append(ev)
     return events
 
 
-def _fetch_esportex():
-    """Fetch ESportex events — scrape iframe pages for real HLS URLs."""
+def _fetch_sm_sports():
+    """Fetch SM Sports live/upcoming matches — direct m3u8 URLs from FanCode/TapMad CDNs."""
     try:
-        _, body = _http_get(f"{ES_API}/streams")
-        if not body:
-            return []
-        data = json.loads(body)
-        if not isinstance(data, dict) or not data.get('success'):
+        raw = urllib.request.urlopen(SMSOURCE, timeout=15).read().decode('utf-8')
+        data = json.loads(raw)
+        items = data.get('matches', []) if isinstance(data, dict) else []
+        if not items:
             return []
     except Exception as e:
-        _log.warning('ESportex fetch failed: %s', e)
+        _log.warning('SMSports fetch failed: %s', e)
         return []
-    _cat_map = {
-        'football': 'football', 'cricket': 'cricket',
-    }
     events = []
-    for api_cat, matches in data.items():
-        if api_cat not in _cat_map or not isinstance(matches, list):
+    for item in items:
+        cat = item.get('Category', '')
+        if cat not in _SM_SPORTS:
             continue
-        sport = _cat_map.get(api_cat, api_cat)
-        for item in matches:
-            tag = item.get('tag', '')
-            parts = tag.split(' vs ') if ' vs ' in tag else tag.split(' - ')
-            t1 = parts[0].strip() if len(parts) > 0 else 'TBD'
-            t2 = parts[1].strip() if len(parts) > 1 else 'TBD'
-            slug = item.get('slug', '')
-            iframes = item.get('iframes', [])
-            if not iframes:
+        streams_raw = item.get('streams', [])
+        if not streams_raw:
+            continue
+        status = (item.get('status', '') or '').upper()
+        ei = item.get('eventInfo', {})
+        t1 = ei.get('teamA', '') or 'TBD'
+        t2 = ei.get('teamB', '') or 'TBD'
+        if t1 == 'TBD' and t2 == 'TBD':
+            # Try parsing from event_name
+            ename = item.get('event_name', '')
+            if ' vs ' or ' Vs ' in ename:
+                parts = ename.split(' vs ') if ' vs ' in ename else ename.split(' Vs ')
+                t1 = parts[0].strip() if len(parts) > 0 else 'TBD'
+                t2 = parts[1].strip() if len(parts) > 1 else 'TBD'
+        streams = []
+        for s in streams_raw:
+            url = s.get('stream_url', '')
+            if not url:
                 continue
-            streams = []
-            for iframe in iframes:
-                url = iframe.get('url', '').replace('http://', 'https://')
-                server = iframe.get('server', 'ESportex')
-                if not url:
-                    continue
-                hls_url = _scrape_iframe_hls(url)
-                if hls_url:
-                    streams.append({
-                        'source': server,
-                        'stream_url': hls_url,
-                        'stream_type': 'hls',
-                        'needs_proxy': True,
-                        'referer': url.split('/')[0] + '//' + urlparse(url).netloc + '/',
-                    })
-                else:
-                    streams.append({
-                        'source': server,
-                        'stream_url': url,
-                        'stream_type': 'embed',
-                    })
-            kickoff = item.get('kickoff', '')
-            is_live = 0
-            if kickoff:
-                try:
-                    kt = _parse_kickoff(kickoff)
-                    if kt and kt <= time.time():
-                        is_live = 1
-                except Exception:
-                    pass
-            ev = {
-                'id': f'es_{slug}',
-                'enc_parent': f'es_{slug}',
-                'parent': f'es_{slug}',
-                'team_a_name': t1,
-                'team_b_name': t2,
-                'team_a_logo': '',
-                'team_b_logo': '',
-                'sport': item.get('league', sport),
-                'league': 'ESportex',
-                'title': tag,
-                'starts_at': '',
-                'is_live': is_live,
-                'is_esportex': True,
-                'streams': streams,
-            }
-            events.append(ev)
+            # Detect stream type and required referer
+            needs_proxy = True
+            referer = ''
+            stream_type = 'hls'
+            if '.mpd' in url:
+                stream_type = 'dash'
+            if 'akamaized.net' in url:
+                referer = 'https://www.tapmad.com/'
+            elif 'fancode.com' in url:
+                referer = ''
+            streams.append({
+                'source': 'SMSports',
+                'stream_url': url,
+                'stream_type': stream_type,
+                'needs_proxy': needs_proxy,
+                'referer': referer,
+            })
+        if not streams:
+            continue
+        slug_name = f"{t1} vs {t2}" if t2 != 'TBD' else t1
+        slug_id = re.sub(r'[^a-z0-9]+', '-', slug_name.lower()).strip('-')
+        logo_a = ei.get('teamAFlag', '')
+        logo_b = ei.get('teamBFlag', '')
+        league_name = ei.get('eventName', '') or item.get('event_name', '')
+        ev = {
+            'id': f'sm_{slug_id}',
+            'enc_parent': f'sm_{slug_id}',
+            'parent': f'sm_{slug_id}',
+            'team_a_name': t1,
+            'team_b_name': t2 if t2 != 'TBD' else '',
+            'team_a_logo': logo_a,
+            'team_b_logo': logo_b,
+            'sport': cat,
+            'league': league_name,
+            'title': item.get('event_name', slug_name),
+            'status': status,
+            'is_smsports': True,
+            'is_live': 1 if status in ('LIVE', 'IN PLAY', 'IN-PLAY', 'PLAYING') else 0,
+            'streams': streams,
+        }
+        events.append(ev)
     return events
-
-
-def _scrape_iframe_hls(url):
-    """Fetch an iframe page and extract an HLS (.m3u8) URL if present."""
-    try:
-        _, html = _http_get(url)
-        if html:
-            urls = re.findall(r'https?://[^\s"\'\\]+\.m3u8[^\s"\'\\]*', html)
-            if urls:
-                return urls[0]
-    except Exception:
-        pass
-    return None
-
-
-def _parse_kickoff(kickoff):
-    """Parse ESportex kickoff string to timestamp."""
-    try:
-        from datetime import datetime, timezone, timedelta
-        dt = datetime.strptime(kickoff, '%Y-%m-%d %H:%M').replace(tzinfo=timezone(timedelta(hours=7)))
-        return dt.timestamp()
-    except Exception:
-        try:
-            return datetime.fromisoformat(kickoff.replace(' ', 'T')).timestamp()
-        except Exception:
-            return None
 
 
 def _make_dedup_key(team_a, team_b):
@@ -551,7 +553,7 @@ def _dedup_merge(all_events):
                 existing['team_a_logo'] = ev['team_a_logo']
             if not existing.get('team_b_logo') and ev.get('team_b_logo'):
                 existing['team_b_logo'] = ev['team_b_logo']
-            for flag in ('is_fancode', 'is_tapmad', 'is_streamfree', 'is_esportex'):
+            for flag in ('is_fancode', 'is_tapmad', 'is_sonyliv', 'is_smsports'):
                 if ev.get(flag):
                     existing[flag] = True
             # Copy FanCode stream data into merged event
@@ -604,7 +606,7 @@ def _pb_cached(slug):
         return []
     # Always try upstream stream resolution (fails safely for non-upstream slugs)
     upstream_streams = []
-    is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_streamfree') or ev.get('is_esportex')
+    is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_sonyliv') or ev.get('is_smsports')
     try:
         servers = _fetch_playback(slug)
         if servers:
@@ -705,6 +707,30 @@ def _resolve_one(slug):
             if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
                 return e.get('fancode_stream_url') or None
         return None
+    # IPTV: direct HLS URL, no upstream
+    if slug.startswith('iptv_'):
+        for e in _get_events():
+            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
+                streams = e.get('streams', [])
+                if streams:
+                    return _clean_url(streams[0].get('stream_url', ''))
+        return None
+    # SonyLiv: direct HLS URL, no upstream
+    if slug.startswith('sl_'):
+        for e in _get_events():
+            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
+                streams = e.get('streams', [])
+                if streams:
+                    return _clean_url(streams[0].get('stream_url', ''))
+        return None
+    # SM Sports: direct HLS URL, no upstream
+    if slug.startswith('sm_'):
+        for e in _get_events():
+            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
+                streams = e.get('streams', [])
+                if streams:
+                    return _clean_url(streams[0].get('stream_url', ''))
+        return None
     streams = _pb_cached(slug)
     for s in streams:
         u = _clean_url(s.get('stream_url', ''))
@@ -755,16 +781,24 @@ def _get_events():
         ('events',  _EV_TTL,     _fetch_events,   _ev_cache),
         ('fancode', _FC_TTL,     _fetch_fancode,   _fc_cache),
         ('tapmad',  _TM_TTL,     _fetch_tapmad,    _tm_cache),
-        ('streamfree', _SF_TTL,  _fetch_streamfree, _sf_cache),
-        ('esportex', _ES_TTL,    _fetch_esportex,  _es_cache),
+        ('sonyliv',  _SL_TTL,    _fetch_sonyliv,   _sl_cache),
+        ('smsports', _SM_TTL,    _fetch_sm_sports,  _sm_cache),
     ]
     futs = {_POOL.submit(_cached, *s): s[0] for s in sources}
     results = {}
-    for f in as_completed(futs, timeout=30):
-        try:
-            results[futs[f]] = f.result()
-        except Exception:
-            results[futs[f]] = []
+    try:
+        for f in as_completed(futs, timeout=30):
+            try:
+                results[futs[f]] = f.result()
+            except Exception:
+                results[futs[f]] = []
+    except TimeoutError:
+        for f, key in futs.items():
+            if key not in results:
+                try:
+                    results[key] = f.result(timeout=0)
+                except Exception:
+                    results[key] = []
     all_events = []
     for key, _, _, _ in sources:
         all_events.extend(results.get(key) or [])
@@ -944,6 +978,53 @@ def api_custom_m3u():
 def api_events():
     """Return all events (upstream + FanCode + TapMad) merged and deduped."""
     return jsonify({'ok': True, 'events': _get_events()})
+
+@app.route('/api/tv-live')
+def api_tv_live():
+    """Return live events with resolved stream URLs for TV Mode."""
+    events = _get_events()
+    live = [e for e in events if e.get('is_live') == 1]
+    # IPTV channels — always-on, fetched separately for TV Mode only
+    iptv_events = _cached('iptv', _IPTV_TTL, _fetch_iptv, _iptv_cache)
+    live = list(iptv_events) + live
+    result = []
+    for ev in live[:50]:
+        slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
+        if not slug:
+            continue
+        # IPTV channels already have streams resolved inline
+        if ev.get('is_iptv'):
+            streams = ev.get('streams', [])
+        else:
+            streams = _pb_cached(slug)
+        if not streams:
+            continue
+        s = streams[0]
+        url = _clean_url(s.get('stream_url', ''))
+        if not url:
+            continue
+        result.append({
+            'slug': slug,
+            'team_a': ev.get('team_a_name', ''),
+            'team_b': ev.get('team_b_name', ''),
+            'team_a_logo': ev.get('team_a_logo', ''),
+            'team_b_logo': ev.get('team_b_logo', ''),
+            'sport': ev.get('sport', ''),
+            'league': ev.get('league', ''),
+            'url': url,
+            'type': s.get('stream_type', ''),
+            'drm_kid': s.get('drm_kid', ''),
+            'drm_key': s.get('drm_key', ''),
+            'needs_proxy': s.get('needs_proxy', False),
+            'referer': s.get('referer', ''),
+            'source': s.get('source', ''),
+        })
+    return jsonify({'ok': True, 'streams': result})
+
+@app.route('/tv')
+def tv_mode():
+    """TV Mode — multi-channel viewer."""
+    return render_template('tv.html')
 
 @app.route('/api/<path:subpath>')
 def proxy_api(subpath):

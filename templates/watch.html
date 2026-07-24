@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>{{ event.team_a_name if event else slug }} vs {{ event.team_b_name if event else 'Stream' }} - ZeroLive</title>
+<title>{{ event.team_a_name if event else slug }}{% if event and event.team_b_name %} vs {{ event.team_b_name }}{% endif %} - ZeroLive</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff2d55'/><stop offset='100%25' stop-color='%237936f7'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' fill='white' font-size='17' font-weight='bold'>Z</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20"></script>
@@ -837,18 +837,20 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
       </div>
       <div class="name">{{ event.team_a_name }}</div>
     </div>
-    <div class="match-vs">
+    <div class="match-vs"{% if not event.team_b_name %} style="display:none"{% endif %}>
       <div class="vs">VS</div>
       <div class="match-meta">
         {% if event.league %}<div class="league">{{ event.league }}</div>{% endif %}
         {% if event.is_fancode %}<span style="display:inline-block;background:#9333ea;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">FANCODE</span>{% endif %}
         {% if event.is_tapmad %}<span style="display:inline-block;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">TAPMAD</span>{% endif %}
-        {% if event.is_streamfree %}<span style="display:inline-block;background:#f59e0b;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">STREAMFREE</span>{% endif %}
-        {% if event.is_esportex %}<span style="display:inline-block;background:#06b6d4;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">ESPORTEX</span>{% endif %}
+
+        {% if event.is_sonyliv %}<span style="display:inline-block;background:#6366f1;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">SONYLIV</span>{% endif %}
+        {% if event.is_smsports %}<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">SPORTS</span>{% endif %}
 
         {% if event.starts_at %}<div class="time" id="eventTime"></div>{% endif %}
       </div>
     </div>
+    {% if event.team_b_name %}
     <div class="match-team">
       <div class="logo-wrap">
         {% if event.team_b_logo %}
@@ -859,6 +861,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
       </div>
       <div class="name">{{ event.team_b_name }}</div>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -1808,7 +1811,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
           var ns=next.enc_parent||next.parent||next.id;
           if(ns!==curSlug){
             var el=document.getElementById('nextMatch');
-            document.getElementById('nextTitle').textContent=(next.team_a_name||'?')+' vs '+(next.team_b_name||'?');
+            document.getElementById('nextTitle').textContent=(next.team_a_name||'?')+(next.team_b_name?' vs '+(next.team_b_name):'');
             document.getElementById('nextLink').href='/watch/'+encodeURIComponent(ns);
             el.style.display='block';
           }
