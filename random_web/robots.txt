@@ -1,3 +1,4 @@
 User-agent: *
 Allow: /
+Disallow: /api/
 Sitemap: https://zerolive.page.gd/sitemap.xml
