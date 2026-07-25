@@ -46,7 +46,6 @@
       <li><strong>Metadata fetch</strong> — The server fetches event listings and playback URLs from upstream APIs using TLS fingerprint impersonation (curl-cffi) to bypass anti-bot detection.</li>
       <li><strong>DRM decryption</strong> — For encrypted DASH streams, the server decrypts ClearKey DRM tokens and provides the decryption keys to the browser player.</li>
       <li><strong>HLS proxy</strong> — HLS manifests are proxied through the server (a few KB) with sub-playlist URLs rewritten. The browser fetches video segments directly from the CDN.</li>
-      <li><strong>IPTV proxy</strong> — For IPTV channels that check headers, both manifests and segments are proxied with custom User-Agent and Referer.</li>
     </ul>
 
     <h2>Technology Stack</h2>
@@ -64,7 +63,6 @@
       <li><strong>Upstream API</strong> — Primary source with DASH/HLS streams and multiple server fallbacks</li>
       <li><strong>FanCode</strong> — Cricket and multi-sport streams (home network only)</li>
       <li><strong>TapMad</strong> — Cricket and sports streams via Akamai CDN</li>
-      <li><strong>IPTV</strong> — User-provided M3U playlists with built-in channel validation</li>
     </ul>
 
     <h2>Privacy</h2>
