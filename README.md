@@ -1,8 +1,8 @@
-# ZeroLive
+# ZeroLive — Free Live Sports Streaming Proxy & Player
 
-**Free live sports streaming proxy & player** — watch football, cricket, basketball, tennis, F1, UFC, WWE, and more. Runs locally on your PC with zero server bandwidth for video.
+**Watch live sports free** — football, cricket, basketball, tennis, Formula 1, UFC, WWE, rugby, hockey, and more. ZeroLive is a lightweight local proxy and HLS/DASH player that lets you stream live sports from multiple sources with zero server bandwidth.
 
-ZeroLive acts as a lightweight local proxy that fetches stream metadata from upstream sources, decrypts playback tokens, and serves a polished web UI with a custom-built video player. Video segments are fetched directly by your browser from the CDN — the server never touches the actual video data.
+> **Keywords**: live sports streaming, watch cricket live, watch football live free, live sports free, sports streaming proxy, HLS player, IPTV sports, live cricket score, football live stream, NBA live, F1 stream, UFC live, IPL live, Premier League live, Champions League live, World Cup live, tennis live, rugby live, live sports online free
 
 ---
 
@@ -10,15 +10,15 @@ ZeroLive acts as a lightweight local proxy that fetches stream metadata from ups
 
 ### Option 1: Installer (Windows)
 
-1. Download **ZeroLive_Installer.exe** from the [download page](https://rafu-milonmart.github.io/my-proxy-project/)
+1. Download **ZeroLive_Installer.exe** from the [download page](https://zerolive.page.gd/download.html) or any of the [official mirrors](#official-download-mirrors)
 2. Run the EXE — pick your theme & install path (default: `C:\Zero_live`)
 3. Click **Launch** — your browser opens to `http://127.0.0.1:9090`
 
 ### Option 2: Manual (any OS)
 
 ```bash
-git clone https://github.com/rafu-milonmart/my-proxy-project.git
-cd my-proxy-project
+git clone https://github.com/rafu-milonmart/Zerolive.git
+cd Zerolive
 pip install -r requirements.txt
 python app.py 9090
 ```
@@ -245,15 +245,15 @@ Events from multiple sources (upstream, FanCode, TapMad) are merged by fuzzy tea
 
 ### What is ZeroLive?
 
-ZeroLive is a local streaming proxy that fetches live sports streams from various sources and serves them through a clean web UI on your PC. It never stores or re-broadcasts video — your browser fetches segments directly from the CDN.
+ZeroLive is a free live sports streaming app that acts as a local proxy on your PC. It fetches live sports streams — cricket, football, basketball, tennis, F1, UFC, WWE, rugby, hockey — from multiple sources and serves them through a clean web UI with a built-in video player. It never stores or re-broadcasts video — your browser fetches segments directly from the CDN. Works as a live cricket streaming app, live football streaming app, and for all major sports.
 
 ### Is it free?
 
-Yes. ZeroLive is open source and free to use. It streams from publicly available sources.
+Yes. ZeroLive is open source and free to use. No subscriptions, no accounts, no tracking. Just free live sports streaming.
 
 ### What sports are supported?
 
-Football (soccer), cricket, basketball, tennis, F1, UFC, WWE, rugby, and more. It depends on what's live on the upstream sources at any given time.
+Football (soccer) — Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, World Cup. Cricket — IPL, BBL, PSL, CPL, ICC events, T20 World Cup, ODI series. Basketball — NBA, EuroLeague. Tennis — ATP, WTA, Grand Slams. Formula 1 (F1). UFC / MMA. WWE. Rugby — Six Nations, World Cup. Ice Hockey — NHL. And more — depends on what's live at any given time.
 
 ### Do I need a VPN?
 
@@ -315,10 +315,24 @@ Yes. ZeroLive runs entirely on your local machine. No data is sent to any extern
 
 ---
 
+## Issues & Contact
+
+For bug reports, feature requests, or help: **milonmartsupershop@gmail.com**
+
+---
+
 ## License
 
 Open source — use however you like.
 
 ---
 
-MADE BY RAFIUL HASAN RAFI
+## Official Download Mirrors
+
+| Mirror | URL |
+|---|---|
+| GitHub | https://github.com/rafu-milonmart/Zerolive/releases |
+| ZeroLive (Primary) | https://zerolive.iceiy.com/ |
+| ZeroLive (Alt) | https://zerolive.page.gd/ |
+| Netlify | https://bejewelled-fenglisu-31730c.netlify.app/ |
+| TinyURL | https://tinyurl.com/Zero-live-sports |

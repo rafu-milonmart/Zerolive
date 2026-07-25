@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FAQ — ZeroLive | Live Sports Streaming Questions</title>
+<meta name="description" content="Frequently asked questions about ZeroLive — free live sports streaming app. How to install, what sports are supported, VPN usage, and more.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff2d55'/><stop offset='100%25' stop-color='%237936f7'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' fill='white' font-size='17' font-weight='bold'>Z</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">ZEROLIVE</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">&#9776;</button>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="faq.html" class="active">FAQ</a></li>
+      <li><a href="about.html">About</a></li>
+    </ul>
+    <a href="download.html" class="nav-cta">Download</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <h1 class="fade-up">Frequently Asked Questions</h1>
+  <p class="fade-up">Everything you need to know about ZeroLive.</p>
+</section>
+
+<section class="faq">
+  <div class="faq-list">
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">What is ZeroLive?<span class="icon">+</span></summary>
+      <div class="faq-a">ZeroLive is a free, open-source live sports streaming app for Windows. It acts as a lightweight local proxy on your PC that fetches live sports streams from multiple sources and serves them through a built-in web player. It supports football, cricket, basketball, tennis, Formula 1, UFC, WWE, rugby, and more.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Is ZeroLive really free?<span class="icon">+</span></summary>
+      <div class="faq-a">Yes. ZeroLive is 100% free, open source, and has no ads, no subscriptions, and no registration required. It streams from publicly available sources.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">What sports can I watch?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <strong>Football</strong> — Premier League, Champions League, La Liga, Serie A, Bundesliga, Ligue 1, MLS, World Cup, and more.<br>
+        <strong>Cricket</strong> — IPL, BBL, PSL, CPL, ICC events, T20 World Cup, ODI series.<br>
+        <strong>Basketball</strong> — NBA, EuroLeague.<br>
+        <strong>Tennis</strong> — ATP, WTA, Grand Slams.<br>
+        <strong>Formula 1</strong> — All race weekends.<br>
+        <strong>UFC / MMA</strong> — Fight nights and PPVs.<br>
+        <strong>WWE</strong> — Raw, SmackDown, PPVs.<br>
+        <strong>Rugby</strong> — Six Nations, World Cup.<br>
+        <strong>Ice Hockey</strong> — NHL.<br>
+        Availability depends on what's live at any given time.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">How do I install ZeroLive?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <strong>Windows Installer:</strong> Download the .exe from the <a href="download.html">download page</a>, run it, pick your theme and install path, then click Launch.<br><br>
+        <strong>Manual Install:</strong> Clone the repo, install Python 3.10+, run <code>pip install -r requirements.txt</code>, then <code>python app.py 9090</code>. Works on Windows, macOS, and Linux.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Do I need a VPN?<span class="icon">+</span></summary>
+      <div class="faq-a">It depends on your region and the stream source. Some streams may be geo-restricted. A VPN can help bypass these restrictions. ZeroLive does not provide a VPN — you'll need your own.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Why does the video buffer or fail to load?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <strong>Source down</strong> — the upstream CDN may be temporarily unavailable. Try switching servers (click a different server button below the player).<br>
+        <strong>Geo-restricted</strong> — some streams only work in certain countries. A VPN may help.<br>
+        <strong>Network issues</strong> — try lowering the quality if your connection is slow.<br>
+        <strong>ISP blocking</strong> — some ISPs block streaming CDNs. A VPN usually fixes this.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Can I watch on my phone or TV?<span class="icon">+</span></summary>
+      <div class="faq-a">Yes! Open <code>http://&lt;your-pc-ip&gt;:9090</code> on any device connected to the same local network. You can also use the M3U URLs in VLC, IPTV Smarters, TiviMate, or any IPTV player app on your phone or smart TV.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">What's the difference between ZL1 and ZL2?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <strong>ZL1</strong> (<code>/</code>) — Live event cards from the upstream API. Shows matches that are live or starting soon. This is the main sports streaming feature.<br><br>
+        <strong>ZL2</strong> (<code>/iptv</code>) — IPTV sports channels from an M3U playlist. These are 24/7 sports channels, not event-specific streams. Great for always-on sports content.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">What's the difference between /watch and /lite?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <code>/watch/&lt;slug&gt;</code> — Full custom player with 11 themes, custom SVG controls, speed control, keyboard shortcuts, and stream info overlay.<br><br>
+        <code>/lite/&lt;slug&gt;</code> — Minimal player using native browser controls. Lighter, works everywhere.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">How does auto-fallback work?<span class="icon">+</span></summary>
+      <div class="faq-a">When a stream fails (CDN error, timeout, etc.), the player automatically tries the next available server for that event. You'll see a brief spinner and then playback resumes on the new server. No manual intervention needed.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Can I add my own IPTV sources?<span class="icon">+</span></summary>
+      <div class="faq-a">Yes. Go to <code>/iptv</code> and click the settings icon to enter a custom M3U URL. You can also manage channel-to-sport mappings in the admin panel (<code>/admin</code>).</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">How do I update ZeroLive?<span class="icon">+</span></summary>
+      <div class="faq-a">
+        <strong>Installer version:</strong> Open settings (gear icon) → Check for Updates → Apply.<br>
+        <strong>Manual version:</strong> Run <code>git pull origin master</code>, then restart.
+      </div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Does it work on Mac or Linux?<span class="icon">+</span></summary>
+      <div class="faq-a">Yes. The manual install works on any OS with Python 3.10+. The Windows installer is Windows-only, but you can run the same commands manually on macOS or Linux.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">Is my data private?<span class="icon">+</span></summary>
+      <div class="faq-a">Yes. ZeroLive runs entirely on your local machine. No data is sent to any external server except the upstream stream sources. There's no telemetry, no analytics, no tracking.</div>
+    </details>
+
+    <details class="faq-item fade-up">
+      <summary class="faq-q">What ports does it use?<span class="icon">+</span></summary>
+      <div class="faq-a">Default is <strong>9090</strong>. You can change it via the <code>PORT</code> environment variable or by passing a port number: <code>python app.py 8080</code>.</div>
+    </details>
+
+  </div>
+</section>
+
+<footer>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="features.html">Features</a>
+    <a href="download.html">Download</a>
+    <a href="faq.html">FAQ</a>
+    <a href="about.html">About</a>
+  </div>
+  <p>ZeroLive is open source. For issues, contact <a href="mailto:milonmartsupershop@gmail.com">milonmartsupershop@gmail.com</a></p>
+</footer>
+</body>
+</html>

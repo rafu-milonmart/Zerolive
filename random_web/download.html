@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Download ZeroLive — Free Live Sports Streaming for Windows</title>
+<meta name="description" content="Download ZeroLive for free. Watch live cricket, football, basketball, and more on your Windows PC. No registration required.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff2d55'/><stop offset='100%25' stop-color='%237936f7'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' fill='white' font-size='17' font-weight='bold'>Z</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">ZEROLIVE</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">&#9776;</button>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="download.html" class="active">Download</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="about.html">About</a></li>
+    </ul>
+    <a href="download.html" class="nav-cta">Download</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <h1 class="fade-up">Download <span class="grad">ZeroLive</span></h1>
+  <p class="fade-up">Free live sports streaming for Windows. No registration, no ads, no tracking.</p>
+</section>
+
+<section class="download-section">
+  <div class="dl-card fade-up">
+    <h2>ZeroLive Installer</h2>
+    <p class="size">Windows 10/11 &middot; ~35 MB &middot; Self-contained installer</p>
+    <a class="btn btn-primary" href="https://raw.githubusercontent.com/rafu-milonmart/Zerolive/refs/heads/master/dist/ZeroLive_Installer.exe" target="_blank" style="width:100%;justify-content:center">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Download for Windows
+    </a>
+    <p style="font-size:12px;color:var(--text-3);margin-top:10px">Direct download from GitHub &middot; No ads or redirects</p>
+
+    <div class="install-steps">
+      <h3>Installation Steps</h3>
+      <ol>
+        <li>Click <strong>Download for Windows</strong> above to save <strong>ZeroLive_Installer.exe</strong></li>
+        <li>Run the installer — choose your theme and install path (default: <code>C:\Zero_live</code>)</li>
+        <li>Click <strong>Launch</strong> or double-click <strong>Zero_live.bat</strong> on your desktop</li>
+        <li>Your browser opens to <strong>http://127.0.0.1:9090</strong> — start watching!</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="alt-install fade-up">
+    <h3>Manual Install (Any OS)</h3>
+    <code>git clone https://github.com/rafu-milonmart/Zerolive.git
+cd Zerolive
+pip install -r requirements.txt
+python app.py 9090</code>
+    <p style="font-size:13px;color:var(--text-2);margin-top:12px">Requires Python 3.10+. Works on Windows, macOS, and Linux.</p>
+  </div>
+
+  <div class="alt-install fade-up" style="margin-top:20px">
+    <h3>Docker</h3>
+    <code>docker build -t zerolive .
+docker run -p 9090:9090 zerolive</code>
+  </div>
+
+  <div class="alt-install fade-up" style="margin-top:20px">
+    <h3>Download Mirrors</h3>
+    <div style="display:grid;gap:10px;margin-top:8px">
+      <a href="https://zerolive.iceiy.com/" class="btn btn-secondary" target="_blank" style="justify-content:center">zerolive.iceiy.com</a>
+      <a href="https://zerolive.page.gd/" class="btn btn-secondary" target="_blank" style="justify-content:center">zerolive.page.gd</a>
+      <a href="https://bejewelled-fenglisu-31730c.netlify.app/" class="btn btn-secondary" target="_blank" style="justify-content:center">Netlify Mirror</a>
+      <a href="https://tinyurl.com/Zero-live-sports" class="btn btn-secondary" target="_blank" style="justify-content:center">tinyurl.com/Zero-live-sports</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="features.html">Features</a>
+    <a href="download.html">Download</a>
+    <a href="faq.html">FAQ</a>
+    <a href="about.html">About</a>
+  </div>
+  <p>ZeroLive is open source. For issues, contact <a href="mailto:milonmartsupershop@gmail.com">milonmartsupershop@gmail.com</a></p>
+</footer>
+</body>
+</html>

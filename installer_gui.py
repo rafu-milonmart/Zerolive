@@ -784,7 +784,7 @@ class InstallerWindow(QWidget):
         root.addWidget(footer)
 
         # Brand
-        self._brand = QLabel("MADE BY RAFIUL HASAN RAFI")
+        self._brand = QLabel("ZEROLIVE")
         self._brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._brand.setStyleSheet(f"color:{self._colors['tert']}; font-size:9px; font-weight:700; letter-spacing:2px; padding:6px 0;")
         root.addWidget(self._brand)

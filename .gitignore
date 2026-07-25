@@ -5,7 +5,6 @@ __pycache__/
 *.bat
 !Zero_live.bat
 !uninstall.bat
-random_web/
 version.txt
 combined-playlist.m3u
 logs/

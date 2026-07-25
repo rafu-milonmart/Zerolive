@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>About ZeroLive — Free Live Sports Streaming Open Source Project</title>
+<meta name="description" content="About ZeroLive — a free, open-source live sports streaming proxy and player. Learn how it works, what technologies it uses, and the team behind it.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='url(%23g)'/><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23ff2d55'/><stop offset='100%25' stop-color='%237936f7'/></linearGradient></defs><text x='16' y='22' text-anchor='middle' fill='white' font-size='17' font-weight='bold'>Z</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<nav>
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo">ZEROLIVE</a>
+    <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">&#9776;</button>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="features.html">Features</a></li>
+      <li><a href="download.html">Download</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+      <li><a href="about.html" class="active">About</a></li>
+    </ul>
+    <a href="download.html" class="nav-cta">Download</a>
+  </div>
+</nav>
+
+<section class="page-hero">
+  <h1 class="fade-up">About ZeroLive</h1>
+  <p class="fade-up">A free, open-source live sports streaming proxy built for fans, by fans.</p>
+</section>
+
+<section class="about-page">
+  <div class="about-content">
+
+    <h2>What is ZeroLive?</h2>
+    <p>ZeroLive is a lightweight local proxy and streaming player that lets you watch live sports on your PC for free. It fetches stream metadata from multiple upstream sources, handles DRM decryption, and serves a polished web UI with a custom-built video player.</p>
+    <p>The key design principle: <strong>the server never touches the actual video data</strong>. Video segments are fetched directly by your browser from the CDN. This means ZeroLive uses virtually zero bandwidth while streaming, and can run on any machine — even a low-end laptop.</p>
+
+    <h2>How It Works</h2>
+    <p>ZeroLive acts as a bridge between stream sources and your browser:</p>
+    <ul>
+      <li><strong>Metadata fetch</strong> — The server fetches event listings and playback URLs from upstream APIs using TLS fingerprint impersonation (curl-cffi) to bypass anti-bot detection.</li>
+      <li><strong>DRM decryption</strong> — For encrypted DASH streams, the server decrypts ClearKey DRM tokens and provides the decryption keys to the browser player.</li>
+      <li><strong>HLS proxy</strong> — HLS manifests are proxied through the server (a few KB) with sub-playlist URLs rewritten. The browser fetches video segments directly from the CDN.</li>
+      <li><strong>IPTV proxy</strong> — For IPTV channels that check headers, both manifests and segments are proxied with custom User-Agent and Referer.</li>
+    </ul>
+
+    <h2>Technology Stack</h2>
+    <ul>
+      <li><strong>Backend:</strong> Flask (Python) with curl-cffi for TLS impersonation and cryptography library for AES-GCM decryption</li>
+      <li><strong>Server:</strong> Hypercorn (ASGI) with 4 workers, falls back to gunicorn gthread or Flask dev server</li>
+      <li><strong>Player:</strong> hls.js, dash.js, and native HTML5 video</li>
+      <li><strong>Frontend:</strong> Vanilla JavaScript, CSS custom properties with 11 theme variants, glassmorphism UI, SVG controls</li>
+      <li><strong>Installer:</strong> PyQt6 GUI built with PyInstaller, deploys a portable Python runtime (~35 MB)</li>
+    </ul>
+
+    <h2>Supported Sources</h2>
+    <p>ZeroLive aggregates streams from multiple sources:</p>
+    <ul>
+      <li><strong>Upstream API</strong> — Primary source with DASH/HLS streams and multiple server fallbacks</li>
+      <li><strong>FanCode</strong> — Cricket and multi-sport streams (home network only)</li>
+      <li><strong>TapMad</strong> — Cricket and sports streams via Akamai CDN</li>
+      <li><strong>IPTV</strong> — User-provided M3U playlists with built-in channel validation</li>
+    </ul>
+
+    <h2>Privacy</h2>
+    <p>ZeroLive runs entirely on your local machine. There is no telemetry, no analytics, no tracking, and no data sent to any external server except the stream sources themselves. Your viewing habits are your own.</p>
+
+    <h2>Open Source</h2>
+    <p>ZeroLive is completely open source under the MIT license. You can read the code, modify it, and distribute it however you like. Contributions are welcome.</p>
+
+    <h2>Credits</h2>
+    <p>Built with help from the open source community.</p>
+
+  </div>
+</section>
+
+<footer>
+  <div class="footer-links">
+    <a href="index.html">Home</a>
+    <a href="features.html">Features</a>
+    <a href="download.html">Download</a>
+    <a href="faq.html">FAQ</a>
+    <a href="about.html">About</a>
+  </div>
+  <p>ZeroLive is open source. For issues, contact <a href="mailto:milonmartsupershop@gmail.com">milonmartsupershop@gmail.com</a></p>
+</footer>
+</body>
+</html>
