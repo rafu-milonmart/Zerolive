@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://zerolive.page.gd/sitemap.xml

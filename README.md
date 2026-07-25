@@ -2,7 +2,7 @@
 
 **Watch live sports free** — football, cricket, basketball, tennis, Formula 1, UFC, WWE, rugby, hockey, and more. ZeroLive is a lightweight local proxy and HLS/DASH player that lets you stream live sports from multiple sources with zero server bandwidth.
 
-> **Keywords**: live sports streaming, watch cricket live, watch football live free, live sports free, sports streaming proxy, HLS player, live cricket score, football live stream, NBA live, F1 stream, UFC live, IPL live, Premier League live, Champions League live, World Cup live, tennis live, rugby live, live sports online free
+> **Keywords**: live sports streaming, watch cricket live, watch football live free, live sports free, sports streaming proxy, HLS player, live cricket score, football live stream, NBA live, F1 stream, UFC live, IPL live, Premier League live, Champions League live, World Cup live, tennis live, rugby live, live sports online free, T20 cricket live, BBL live, PSL live, CPL live, ICC cricket live, ATP tennis live, WTA tennis live, Grand Slam live, NHL hockey live, Formula 1 live stream, MotoGP live, boxing live, WWE live, NFL live, Serie A live, La Liga live, Bundesliga live, Ligue 1 live, free live sports app, sports streaming software, live match online
 
 ---
 
