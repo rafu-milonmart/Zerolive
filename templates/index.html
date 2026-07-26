@@ -97,6 +97,38 @@
   --live:#f59e0b;--live-dim:rgba(245,158,11,.12);
   --shadow:0 8px 40px rgba(0,0,0,.5);
 }
+[data-theme="crimson"]{
+  --bg:#0a0508;--bg-elevated:#150a10;--bg-card:#1e0f16;--bg-hover:#2a1520;
+  --accent-1:#e11d48;--accent-2:#f43f5e;--accent:var(--accent-2);--accent-glow:rgba(225,29,72,.3);
+  --text:#fff0f3;--text-secondary:#d4a0b0;--text-tertiary:#905068;
+  --line:rgba(225,29,72,.12);--line-strong:rgba(225,29,72,.22);--line-hover:rgba(225,29,72,.22);
+  --live:#fb7185;--live-dim:rgba(251,113,133,.12);
+  --shadow:0 8px 40px rgba(0,0,0,.5);
+}
+[data-theme="lavender"]{
+  --bg:#0a080f;--bg-elevated:#140e20;--bg-card:#1c1430;--bg-hover:#261c3e;
+  --accent-1:#a78bfa;--accent-2:#c084fc;--accent:var(--accent-2);--accent-glow:rgba(167,139,250,.25);
+  --text:#f0ecff;--text-secondary:#b8a8d8;--text-tertiary:#7860a0;
+  --line:rgba(167,139,250,.12);--line-strong:rgba(167,139,250,.22);--line-hover:rgba(167,139,250,.22);
+  --live:#c084fc;--live-dim:rgba(192,132,252,.12);
+  --shadow:0 8px 40px rgba(0,0,0,.5);
+}
+[data-theme="ember"]{
+  --bg:#0a0705;--bg-elevated:#1a100a;--bg-card:#26160f;--bg-hover:#342018;
+  --accent-1:#f97316;--accent-2:#fb923c;--accent:var(--accent-2);--accent-glow:rgba(249,115,22,.3);
+  --text:#fff7ed;--text-secondary:#d4a880;--text-tertiary:#906040;
+  --line:rgba(249,115,22,.12);--line-strong:rgba(249,115,22,.22);--line-hover:rgba(249,115,22,.22);
+  --live:#fb923c;--live-dim:rgba(251,146,60,.12);
+  --shadow:0 8px 40px rgba(0,0,0,.5);
+}
+[data-theme="sakura"]{
+  --bg:#0a080c;--bg-elevated:#16101a;--bg-card:#201624;--bg-hover:#2c1e30;
+  --accent-1:#ec4899;--accent-2:#f472b6;--accent:var(--accent-2);--accent-glow:rgba(236,72,153,.25);
+  --text:#fdf2f8;--text-secondary:#d8a0c0;--text-tertiary:#906080;
+  --line:rgba(236,72,153,.12);--line-strong:rgba(236,72,153,.22);--line-hover:rgba(236,72,153,.22);
+  --live:#f472b6;--live-dim:rgba(244,114,182,.12);
+  --shadow:0 8px 40px rgba(0,0,0,.5);
+}
 
 html{scroll-behavior:smooth}
 body{
@@ -785,12 +817,12 @@ img{max-width:100%;display:block}
 
 <script>
 (function(){
-  var E=function(s){return String(s??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];})};
+  var E=function(s){return String(s??'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'\x27'}[c];})};
   var INIT=function(n){return (n||'?').split(/\s+/).filter(Boolean).slice(0,2).map(function(w){return w[0].toUpperCase();}).join('');};
   var ESC_INIT=function(n){return E(INIT(n));};
   var SPORT_COLORS={Football:'#ff2d55',Cricket:'#7936f7',Basketball:'#ff6b35',Tennis:'#facc15',Hockey:'#06b6d4',Baseball:'#a855f7','Formula 1':'#ef4444',F1:'#ef4444',Esports:'#22d65e',MMA:'#dc2626',WWE:'#ef4444'};
   var sportColor=function(s){return SPORT_COLORS[s]||'#6b7280';};
-  var THEMES=['dark','light','amethyst','emerald','ruby','ocean','cyberpunk','sunset','nord','matrix','midnight'];
+  var THEMES=['dark','light','amethyst','emerald','ruby','ocean','cyberpunk','sunset','nord','matrix','midnight','crimson','lavender','ember','sakura'];
   var themeSelect=document.getElementById('themeSelect');
   themeSelect.innerHTML=THEMES.map(function(t){return '<option value="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</option>'}).join('');
   var savedTheme=localStorage.getItem('zl-theme')||'{{ default_theme }}';

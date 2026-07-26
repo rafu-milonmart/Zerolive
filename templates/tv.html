@@ -17,6 +17,11 @@
 [data-theme="cyberpunk"]{--bg:#0d0221;--bg-elevated:#150538;--bg-card:#1a0740;--bg-hover:#240a5c;--accent:#ff2a6d;--text:#f0e6ff;--text-secondary:#a080cc;--text-tertiary:#6a4d99;--line:#2a1050;--live:#ff2a6d;--shadow:0 4px 24px rgba(255,42,109,.2)}
 [data-theme="sunset"]{--bg:#1a0a00;--bg-elevated:#261005;--bg-card:#301508;--bg-hover:#3d1c0a;--accent:#ff6b35;--text:#ffeedd;--text-secondary:#cc9977;--text-tertiary:#886644;--line:#3d1c0a;--live:#ef4444;--shadow:0 4px 24px rgba(255,107,53,.2)}
 [data-theme="nord"]{--bg:#2e3440;--bg-elevated:#3b4252;--bg-card:#434c5e;--bg-hover:#4c566a;--accent:#88c0d0;--text:#eceff4;--text-secondary:#a0b0c0;--text-tertiary:#6a7a8a;--line:#4c566a;--live:#bf616a;--shadow:0 4px 24px rgba(0,0,0,.3)}
+[data-theme="crimson"]{--bg:#0a0508;--bg-elevated:#150a10;--bg-card:#1e0f16;--bg-hover:#2a1520;--accent:#e11d48;--text:#fff0f3;--text-secondary:#d4a0b0;--text-tertiary:#905068;--line:#2a1520;--live:#fb7185;--shadow:0 4px 24px rgba(225,29,72,.2)}
+[data-theme="lavender"]{--bg:#0a080f;--bg-elevated:#140e20;--bg-card:#1c1430;--bg-hover:#261c3e;--accent:#a78bfa;--text:#f0ecff;--text-secondary:#b8a8d8;--text-tertiary:#7860a0;--line:#261c3e;--live:#c084fc;--shadow:0 4px 24px rgba(167,139,250,.2)}
+[data-theme="ocean"]{--bg:#050a10;--bg-elevated:#0a1420;--bg-card:#0f1e30;--bg-hover:#142840;--accent:#06b6d4;--text:#ecfeff;--text-secondary:#80c8d8;--text-tertiary:#408898;--line:#142840;--live:#22d3ee;--shadow:0 4px 24px rgba(6,182,212,.2)}
+[data-theme="ember"]{--bg:#0a0705;--bg-elevated:#1a100a;--bg-card:#26160f;--bg-hover:#342018;--accent:#f97316;--text:#fff7ed;--text-secondary:#d4a880;--text-tertiary:#906040;--line:#342018;--live:#fb923c;--shadow:0 4px 24px rgba(249,115,22,.2)}
+[data-theme="sakura"]{--bg:#0a080c;--bg-elevated:#16101a;--bg-card:#201624;--bg-hover:#2c1e30;--accent:#ec4899;--text:#fdf2f8;--text-secondary:#d8a0c0;--text-tertiary:#906080;--line:#2c1e30;--live:#f472b6;--shadow:0 4px 24px rgba(236,72,153,.2)}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;overflow-x:hidden}
 body{display:flex;flex-direction:column}
 
@@ -28,16 +33,35 @@ body{display:flex;flex-direction:column}
 .tv-logo{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:800;color:var(--text);text-decoration:none;letter-spacing:-.5px}
 .tv-logo svg{width:24px;height:24px}
 .tv-logo span{color:var(--accent)}
-.tv-title{font-size:14px;font-weight:700;color:var(--text);margin-left:auto;letter-spacing:.5px;text-transform:uppercase}
+.tv-title{font-size:14px;font-weight:700;color:var(--text);margin-left:auto;letter-spacing:.5px;text-transform:uppercase;display:flex;align-items:center;gap:10px}
 .tv-badge{background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px;letter-spacing:1px}
+.tv-theme-btn{background:var(--bg-card);border:1px solid var(--line);border-radius:8px;padding:5px 10px;color:var(--text-secondary);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.tv-theme-btn:hover{border-color:var(--text-tertiary);color:var(--text)}
 
 /* Featured Player */
 .featured-wrap{position:relative;width:100%;max-width:1400px;margin:0 auto;aspect-ratio:16/9;background:#000;border-radius:0;overflow:hidden}
 .featured-wrap video{width:100%;height:100%;object-fit:contain;background:#000}
 .featured-info{position:absolute;bottom:0;left:0;right:0;padding:12px 16px;background:linear-gradient(transparent,rgba(0,0,0,.85));display:flex;align-items:center;gap:12px;z-index:5}
+.featured-info.hidden{display:none}
 .featured-teams{font-size:15px;font-weight:700;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.6)}
 .featured-meta{font-size:12px;color:rgba(255,255,255,.7)}
 .featured-empty{display:flex;align-items:center;justify-content:center;width:100%;height:100%;color:var(--text-tertiary);font-size:16px;font-weight:600}
+
+/* Live badge on featured */
+.featured-live{position:absolute;top:12px;left:12px;display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;background:rgba(239,68,68,.85);color:#fff;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;z-index:6}
+.featured-live.hidden{display:none}
+.featured-live .dot{width:6px;height:6px;border-radius:50%;background:#fff;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Featured controls overlay */
+.featured-controls{position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;gap:8px;padding:10px 16px;background:linear-gradient(transparent,rgba(0,0,0,.7));z-index:7;opacity:0;transition:opacity .3s}
+.featured-wrap:hover .featured-controls{opacity:1}
+.featured-controls.hidden{display:none}
+.fc-btn{width:36px;height:36px;border-radius:8px;background:rgba(255,255,255,.1);border:none;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;flex-shrink:0}
+.fc-btn:hover{background:rgba(255,255,255,.2)}
+.fc-btn svg{width:18px;height:18px}
+.fc-spacer{flex:1}
+.fc-label{font-size:12px;font-weight:600;color:rgba(255,255,255,.8);white-space:nowrap}
 
 /* Spinner */
 .tv-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border:3px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;z-index:6}
@@ -48,22 +72,15 @@ body{display:flex;flex-direction:column}
 .tv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;padding:8px 12px;max-width:1400px;margin:0 auto;width:100%}
 .tv-cell{position:relative;aspect-ratio:16/9;background:var(--bg-card);border:1px solid var(--line);border-radius:10px;overflow:hidden;cursor:pointer;transition:all .2s}
 .tv-cell:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 16px var(--accent-glow)}
-.tv-cell video{width:100%;height:100%;object-fit:cover;background:#000;display:none}
-.tv-cell.loading video{display:block}
-.tv-cell.playing video{display:block}
+.tv-cell.current{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-glow)}
 .tv-cell-poster{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--bg-card);transition:opacity .2s}
-.tv-cell.loading .tv-cell-poster,.tv-cell.playing .tv-cell-poster{opacity:0;pointer-events:none}
-.tv-cell-teams{font-size:14px;font-weight:700;color:var(--text);text-align:center;line-height:1.3}
+.tv-cell-teams{font-size:14px;font-weight:700;color:var(--text);text-align:center;line-height:1.3;padding:0 8px}
 .tv-cell-meta{font-size:11px;color:var(--text-secondary)}
 .tv-cell-source{font-size:9px;font-weight:700;padding:2px 6px;border-radius:99px;letter-spacing:.5px;background:var(--accent);color:#fff}
 .tv-cell-play{width:44px;height:44px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px var(--accent-glow);transition:transform .2s}
 .tv-cell:hover .tv-cell-play{transform:scale(1.1)}
 .tv-cell-play svg{width:18px;height:18px;fill:#fff;margin-left:2px}
-.tv-cell-close{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.7);border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;opacity:0;transition:opacity .2s}
-.tv-cell:hover .tv-cell-close{opacity:1}
 .tv-cell-name{position:absolute;bottom:0;left:0;right:0;padding:6px 10px;background:linear-gradient(transparent,rgba(0,0,0,.8));font-size:11px;font-weight:600;color:#fff;z-index:5;text-shadow:0 1px 3px rgba(0,0,0,.6)}
-.tv-cell-spinner{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:28px;height:28px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:none;z-index:8}
-.tv-cell.loading .tv-cell-spinner{display:block}
 
 /* Empty state */
 .tv-empty{grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--text-tertiary)}
@@ -94,16 +111,33 @@ body{display:flex;flex-direction:column}
     <svg viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="5" fill="url(#lg)"/><defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24"><stop stop-color="#00c853"/><stop offset="1" stop-color="#0091ea"/></linearGradient></defs><polygon points="9,5 9,19 19,12" fill="#fff"/></svg>
     Zero<span>Live</span>
   </a>
-  <div class="tv-title">TV MODE <span class="tv-badge" id="liveCount">0 LIVE</span></div>
+  <div class="tv-title">
+    <span id="liveCount">0 LIVE</span>
+    <button class="tv-theme-btn" id="themeBtn" title="Change theme">Theme</button>
+  </div>
 </header>
 
 <div class="featured-wrap" id="featuredWrap">
   <div class="featured-empty" id="featuredEmpty">Click a stream below to start</div>
   <video id="featuredVideo" playsinline></video>
   <div class="tv-spinner hidden" id="featuredSpinner"></div>
+  <div class="featured-live hidden" id="featuredLive"><span class="dot"></span> LIVE</div>
   <div class="featured-info hidden" id="featuredInfo">
     <div class="featured-teams" id="featuredTeams"></div>
     <div class="featured-meta" id="featuredMeta"></div>
+  </div>
+  <div class="featured-controls hidden" id="featuredControls">
+    <button class="fc-btn" id="fcPlayBtn" title="Play/Pause">
+      <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19,12 8,19"/></svg>
+    </button>
+    <span class="fc-label" id="fcStreamLabel"></span>
+    <div class="fc-spacer"></div>
+    <button class="fc-btn" id="fcStopBtn" title="Stop stream">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+    </button>
+    <button class="fc-btn" id="fcFullscreenBtn" title="Fullscreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+    </button>
   </div>
 </div>
 
@@ -119,15 +153,66 @@ body{display:flex;flex-direction:column}
   var featuredEmpty=document.getElementById('featuredEmpty');
   var featuredSpinner=document.getElementById('featuredSpinner');
   var featuredInfo=document.getElementById('featuredInfo');
+  var featuredLive=document.getElementById('featuredLive');
   var featuredTeams=document.getElementById('featuredTeams');
   var featuredMeta=document.getElementById('featuredMeta');
+  var featuredControls=document.getElementById('featuredControls');
+  var fcPlayBtn=document.getElementById('fcPlayBtn');
+  var fcStopBtn=document.getElementById('fcStopBtn');
+  var fcFullscreenBtn=document.getElementById('fcFullscreenBtn');
+  var fcStreamLabel=document.getElementById('fcStreamLabel');
   var liveCount=document.getElementById('liveCount');
+  var themeBtn=document.getElementById('themeBtn');
   var streams=[];
   var featuredIdx=-1;
   var featuredPlayer=null;
-  var cellPlayers={};
-  var cellStates={};
+  var loadGeneration=0;
   var L=function(msg){try{console.log('[ZL-TV]',msg)}catch(_){}};
+
+  var E=function(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'\x27'}[c];})};
+
+  /* ---- Theme sync from localStorage ---- */
+  var themeNames=['dark','light','cyberpunk','sunset','nord','crimson','lavender','ocean','ember','sakura'];
+  var savedTheme=localStorage.getItem('zl-theme')||'dark';
+  if(themeNames.indexOf(savedTheme)===-1)savedTheme='dark';
+  document.documentElement.setAttribute('data-theme',savedTheme);
+  var themeIdx=themeNames.indexOf(savedTheme);
+  themeBtn.textContent=themeNames[themeIdx].charAt(0).toUpperCase()+themeNames[themeIdx].slice(1);
+  themeBtn.addEventListener('click',function(){
+    themeIdx=(themeIdx+1)%themeNames.length;
+    var t=themeNames[themeIdx];
+    document.documentElement.setAttribute('data-theme',t);
+    localStorage.setItem('zl-theme',t);
+    themeBtn.textContent=t.charAt(0).toUpperCase()+t.slice(1);
+  });
+
+  /* ---- Featured player controls ---- */
+  function updatePlayIcon(){
+    var playing=!featuredVideo.paused;
+    fcPlayBtn.innerHTML=playing
+      ?'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+      :'<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19,12 8,19"/></svg>';
+  }
+  featuredVideo.addEventListener('play',updatePlayIcon);
+  featuredVideo.addEventListener('pause',updatePlayIcon);
+  fcPlayBtn.addEventListener('click',function(){
+    if(featuredVideo.paused)featuredVideo.play().catch(function(){});else featuredVideo.pause();
+  });
+  fcStopBtn.addEventListener('click',function(){
+    destroyFeaturedPlayer();
+    featuredIdx=-1;
+    featuredEmpty.style.display='';
+    featuredEmpty.textContent='Click a stream below to start';
+    featuredInfo.classList.add('hidden');
+    featuredLive.classList.add('hidden');
+    featuredControls.classList.add('hidden');
+    renderGrid();
+  });
+  fcFullscreenBtn.addEventListener('click',function(){
+    var wrap=document.getElementById('featuredWrap');
+    if(document.fullscreenElement){document.exitFullscreen();}
+    else if(wrap.requestFullscreen){wrap.requestFullscreen();}
+  });
 
   function normHex(h){if(!h)return'';h=h.replace(/0x/gi,'').replace(/[^a-fA-F0-9]/g,'');return h.length===32?h:h.padStart(32,'0');}
 
@@ -153,116 +238,121 @@ body{display:flex;flex-direction:column}
     for(var i=0;i<streams.length;i++){
       if(i===featuredIdx)continue;
       var s=streams[i];
-      var state=cellStates[i]||'idle';
-      var cls='tv-cell'+(state!=='idle'?' '+state:'');
-      html+='<div class="'+cls+'" data-idx="'+i+'" onclick="window._tvCellClick('+i+')">';
-      html+='<video playsinline muted></video>';
-      html+='<div class="tv-cell-spinner"></div>';
+      var cls='tv-cell'+(i===featuredIdx?' current':'');
+      html+='<div class="'+cls+'" data-idx="'+i+'">';
       html+='<div class="tv-cell-poster">';
       html+='<div class="tv-cell-teams">'+E(s.team_a)+(s.team_b?' vs '+E(s.team_b):'')+'</div>';
-      html+='<div class="tv-cell-meta">'+E(s.sport)+(s.league?' &middot; '+E(s.league):'')+'</div>';
+      html+='<div class="tv-cell-meta">'+E(s.sport)+(s.league?' \u00b7 '+E(s.league):'')+'</div>';
       html+='<div class="tv-cell-source">'+E(s.source)+'</div>';
       html+='<div class="tv-cell-play"><svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg></div>';
       html+='</div>';
       html+='<div class="tv-cell-name">'+E(s.team_a)+(s.team_b?' vs '+E(s.team_b):'')+'</div>';
-      html+='<button class="tv-cell-close" onclick="event.stopPropagation();window._tvCellClose('+i+')">&times;</button>';
       html+='</div>';
     }
     if(streams.length===0||(streams.length===1&&featuredIdx===0)){
       html='<div class="tv-empty"><h3>No live streams</h3><p>Check back when matches are live</p></div>';
     }
     grid.innerHTML=html;
+    /* Attach click handlers via delegation */
   }
 
-  var E=function(s){return String(s||'').replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];})};
-
-  window._tvCellClick=function(idx){
-    L('Cell click: '+idx);
-    destroyCellPlayer(idx);
-    promoteToFeatured(idx);
-  };
-
-  window._tvCellClose=function(idx){
-    destroyCellPlayer(idx);
-    delete cellStates[idx];
-    renderGrid();
-  };
+  grid.addEventListener('click',function(e){
+    var cell=e.target.closest('.tv-cell');
+    if(!cell)return;
+    var idx=parseInt(cell.getAttribute('data-idx'),10);
+    if(!isNaN(idx)){
+      L('Cell click: '+idx);
+      promoteToFeatured(idx);
+    }
+  });
 
   function promoteToFeatured(idx){
     if(idx<0||idx>=streams.length)return;
     var s=streams[idx];
+    var gen=++loadGeneration;
     L('Promoting '+idx+' to featured: '+s.team_a+(s.team_b?' vs '+s.team_b:''));
+    destroyFeaturedPlayer();
     featuredIdx=idx;
     featuredEmpty.style.display='none';
     featuredSpinner.classList.remove('hidden');
     featuredInfo.classList.add('hidden');
+    featuredLive.classList.add('hidden');
+    featuredControls.classList.remove('hidden');
     featuredTeams.textContent=s.team_a+(s.team_b?' vs '+s.team_b:'');
     featuredMeta.textContent=s.sport+(s.league?' · '+s.league:'')+' · '+s.source;
+    fcStreamLabel.textContent='LIVE '+(idx+1)+' · '+s.source;
+    updatePlayIcon();
     renderGrid();
-    loadFeaturedStream(s);
+    loadFeaturedStream(s,gen);
   }
 
   function destroyFeaturedPlayer(){
     if(featuredPlayer){
-      try{if(featuredPlayer.destroy)featuredPlayer.destroy();else if(featuredPlayer.detachMediaElement)featuredPlayer.detachMediaElement();}catch(_){}
+      try{
+        if(featuredPlayer.destroy)featuredPlayer.destroy();
+        else if(featuredPlayer.detachMedia)featuredPlayer.detachMedia();
+        else if(featuredPlayer.detachMediaElement)featuredPlayer.detachMediaElement();
+        else if(featuredPlayer.unload)featuredPlayer.unload();
+      }catch(_){}
       featuredPlayer=null;
     }
-    featuredVideo.src='';
+    featuredVideo.removeAttribute('src');
+    featuredVideo.load();
   }
 
-  function destroyCellPlayer(idx){
-    if(cellPlayers[idx]){
-      try{if(cellPlayers[idx].destroy)cellPlayers[idx].destroy();else if(cellPlayers[idx].detachMediaElement)cellPlayers[idx].detachMediaElement();}catch(_){}
-      delete cellPlayers[idx];
-    }
-    delete cellStates[idx];
-  }
-
-  function loadFeaturedStream(s){
+  function loadFeaturedStream(s,gen){
+    if(gen!==loadGeneration)return;
     destroyFeaturedPlayer();
     var url=s.url;
     var isDash=s.type==='dash'||url.includes('.mpd');
     var isHls=s.type==='hls'||url.includes('.m3u8');
     var isMpegts=s.type==='mpegts';
+    var isLive=s.type==='hls'||s.type==='dash'||isMpegts;
+
+    if(isLive)featuredLive.classList.remove('hidden');
 
     if(isDash){
       if(typeof shaka==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='Shaka Player not loaded';return;}
       var sp=new shaka.Player();
       featuredPlayer=sp;
-      var cfg={abr:{enabled:true},streaming:{bufferingGoal:30,rebufferingGoal:15}};
+      var cfg={abr:{enabled:true},streaming:{bufferingGoal:15,rebufferingGoal:5}};
       if(s.drm_kid&&s.drm_key){
         var kid=normHex(s.drm_kid),key=normHex(s.drm_key);
         cfg.drm={clearKeys:{}};cfg.drm.clearKeys[kid]=key;
       }
       sp.configure(cfg);
-      sp.addEventListener('error',function(e){L('Featured DASH error');});
+      sp.addEventListener('error',function(e){if(gen!==loadGeneration)return;L('Featured DASH error');});
       var t=setTimeout(function(){
+        if(gen!==loadGeneration)return;
         try{sp.destroy&&sp.destroy();}catch(_){}
         featuredSpinner.classList.add('hidden');
-        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s);return;}
+        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s,gen);return;}
         featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed to load';
-      },15000);
+      },8000);
       sp.attach(featuredVideo).then(function(){return sp.load(url);}).then(function(){
+        if(gen!==loadGeneration)return;
         clearTimeout(t);featuredSpinner.classList.add('hidden');
         featuredVideo.play().catch(function(){});
         featuredInfo.classList.remove('hidden');
         L('Featured DASH loaded');
       })['catch'](function(err){
+        if(gen!==loadGeneration)return;
         clearTimeout(t);
         L('Featured DASH load failed: '+(err.message||err));
         try{sp.destroy&&sp.destroy();}catch(_){}
-        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s);return;}
+        if(s.needs_proxy||s.drm_kid){loadFeaturedViaProxy(s,gen);return;}
         featuredSpinner.classList.add('hidden');
         featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
       });
     }else if(isHls){
       if(typeof Hls==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='HLS.js not loaded';return;}
-      loadFeaturedHls(url,s);
+      loadFeaturedHls(url,s,gen);
     }else if(isMpegts){
       if(typeof mpegts==='undefined'){featuredSpinner.classList.add('hidden');featuredEmpty.style.display='';featuredEmpty.textContent='mpegts.js not loaded';return;}
       var tp=mpegts.createPlayer({type:'mpegts',isLive:true,url:url},{enableWorker:true,enableStashBuffer:true,stashInitialSize:128,liveBufferLatencyChasing:true,liveBufferLatencyMaxLatency:5});
       tp.attachMediaElement(featuredVideo);
-      tp.load();tp.play();
+      tp.load();
+      tp.play().catch(function(){});
       featuredPlayer=tp;
       featuredSpinner.classList.add('hidden');
       featuredInfo.classList.remove('hidden');
@@ -275,25 +365,27 @@ body{display:flex;flex-direction:column}
     }
   }
 
-  function loadFeaturedHls(url,s){
-    var h=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:300,backbufferLength:60,liveSyncDuration:15,liveMaxLatencyDuration:60,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true});
+  function loadFeaturedHls(url,s,gen){
+    if(gen!==loadGeneration)return;
+    var h=new Hls({enableWorker:true,maxBufferLength:30,maxMaxBufferLength:120,backbufferLength:30,liveSyncDuration:5,liveMaxLatencyDuration:30,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true});
     featuredPlayer=h;
     var done=false;
     var t=setTimeout(function(){
-      if(done)return;
+      if(done||gen!==loadGeneration)return;
       try{h.destroy();}catch(_){}
       done=true;
       if(!s._triedProxy){
         s._triedProxy=true;
         var pUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
         if(s.referer)pUrl+='&referer='+encodeURIComponent(s.referer);
-        loadFeaturedHls(pUrl,s);
+        loadFeaturedHls(pUrl,s,gen);
       }else{
         featuredSpinner.classList.add('hidden');
         featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
       }
-    },15000);
+    },10000);
     h.on(Hls.Events.MANIFEST_PARSED,function(){
+      if(gen!==loadGeneration)return;
       clearTimeout(t);done=true;
       featuredSpinner.classList.add('hidden');
       featuredVideo.play().catch(function(){});
@@ -301,13 +393,13 @@ body{display:flex;flex-direction:column}
       L('Featured HLS loaded');
     });
     h.on(Hls.Events.ERROR,function(e,data){
-      if(done)return;
-      if(data.fatal){clearTimeout(t);try{h.destroy();}catch(_{});done=true;
+      if(done||gen!==loadGeneration)return;
+      if(data.fatal){clearTimeout(t);try{h.destroy();}catch(_){}done=true;
         if(!s._triedProxy){
           s._triedProxy=true;
           var pUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
           if(s.referer)pUrl+='&referer='+encodeURIComponent(s.referer);
-          loadFeaturedHls(pUrl,s);
+          loadFeaturedHls(pUrl,s,gen);
         }else{
           featuredSpinner.classList.add('hidden');
           featuredEmpty.style.display='';featuredEmpty.textContent='Stream failed';
@@ -318,14 +410,15 @@ body{display:flex;flex-direction:column}
     h.loadSource(url);
   }
 
-  function loadFeaturedViaProxy(s){
+  function loadFeaturedViaProxy(s,gen){
+    if(gen!==loadGeneration)return;
     if(s.type==='dash'||(s.url||'').includes('.mpd')){
       var pUrl='/proxy/manifest/'+encodeURIComponent(s.slug)+'/0/';
-      loadFeaturedStream(Object.assign({},s,{url:pUrl,_triedProxy:true}));
+      loadFeaturedStream(Object.assign({},s,{url:pUrl,_triedProxy:true}),gen);
     }else{
       var hlsUrl='/proxy/hls/'+encodeURIComponent(s.slug)+'/0/?rewrite=1';
       if(s.referer)hlsUrl+='&referer='+encodeURIComponent(s.referer);
-      loadFeaturedHls(hlsUrl,Object.assign({},s,{_triedProxy:true}));
+      loadFeaturedHls(hlsUrl,Object.assign({},s,{_triedProxy:true}),gen);
     }
   }
 

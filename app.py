@@ -82,7 +82,7 @@ _pb_cache = {}       # slug -> (ts, streams_list)
 _manifest_cache = {} # (slug, idx) -> (ts, body)
 _m3u_cache = {}
 _hls_m3u_cache = {}  # (slug, idx, url_hash) -> (ts, rewritten_text)
-_HLS_M3U_TTL = 5    # seconds — short for live streams
+_HLS_M3U_TTL = 15   # seconds — live stream m3u8 manifest cache
 _DECRYPT_KEY_CACHE = {}
 
 def _clean_url(url):
@@ -155,8 +155,6 @@ _tm_cache = {}
 _sl_cache = {}
 
 SONYLIV_SOURCE = 'https://raw.githubusercontent.com/srhady/SonyLiv/main/sonyliv_playlist.json'
-_sl_cache = {}
-_SL_TTL = 60
 
 SMSOURCE = 'https://raw.githubusercontent.com/sm-monirulislam/Upcoming-and-Live-Sports-Data/refs/heads/main/Sports_data.json'
 _sm_cache = {}
@@ -230,7 +228,7 @@ def _fetch_sonyliv():
             'team_b_logo': '',
             'sport': sport,
             'league': mi.get('title', 'SonyLiv'),
-            'title': ep_title or f'{t1} vs {t2}' if t2 else t1,
+            'title': ep_title or (f'{t1} vs {t2}' if t2 else t1),
             'status': 'LIVE' if is_live else 'UPCOMING',
             'is_sonyliv': True,
             'is_live': 1 if is_live else 0,
@@ -247,9 +245,12 @@ def _fetch_sonyliv():
         events.append(ev)
     return events
 
+_slug_streams_cache = {}  # slug -> (ts, streams) — fast lookup without scanning events
+_SLUG_STREAMS_TTL = 30
+
 _seg_prefetch = {}       # url -> (ts, bytes, content_type)
 _SEG_PREFETCH_TTL = 45   # seconds
-_SEG_PREFETCH_WORKERS = 8
+_SEG_PREFETCH_WORKERS = 16
 _seg_pool = ThreadPoolExecutor(max_workers=_SEG_PREFETCH_WORKERS)
 
 def _prefetch_segments(urls, ref=''):
@@ -261,7 +262,8 @@ def _prefetch_segments(urls, ref=''):
         _seg_prefetch.pop(k, None)
     to_fetch = []
     for u in urls:
-        if u in _seg_prefetch and now - _seg_prefetch[u][0] < _SEG_PREFETCH_TTL:
+        hit = _seg_prefetch.get(u)
+        if hit and now - hit[0] < _SEG_PREFETCH_TTL:
             continue
         to_fetch.append(u)
     if not to_fetch:
@@ -274,7 +276,7 @@ def _prefetch_segments(urls, ref=''):
                 _seg_prefetch[url] = (time.time(), r.content, r.headers.get('content-type', 'video/mp2t'))
         except Exception:
             pass
-    for u in to_fetch[:15]:
+    for u in to_fetch[:30]:
         _seg_pool.submit(_fetch_one, u)
 
 def _prefetch_hls_segments(m3u8_text, ref=''):
@@ -298,7 +300,7 @@ def _prefetch_dash_segments(mpd_text, base_url, ref=''):
     for m in re.finditer(r'<SegmentTemplate[^>]+media="([^"]+)"', mpd_text):
         urls.append(urljoin(base_url, m.group(1)))
     if urls:
-        _prefetch_segments(urls[:20], ref)
+        _prefetch_segments(urls[:40], ref)
 
 def _fetch_tapmad():
     """Fetch TapMad events and normalize."""
@@ -445,7 +447,7 @@ def _fetch_sm_sports():
         if t1 == 'TBD' and t2 == 'TBD':
             # Try parsing from event_name
             ename = item.get('event_name', '')
-            if ' vs ' or ' Vs ' in ename:
+            if ' vs ' in ename or ' Vs ' in ename:
                 parts = ename.split(' vs ') if ' vs ' in ename else ename.split(' Vs ')
                 t1 = parts[0].strip() if len(parts) > 0 else 'TBD'
                 t2 = parts[1].strip() if len(parts) > 1 else 'TBD'
@@ -520,7 +522,6 @@ def _teams_match(a1, b1, a2, b2):
 
 def _dedup_merge(all_events):
     merged = {}
-    merged_keys = list(merged.keys())
     for ev in all_events:
         key = _make_dedup_key(ev.get('team_a_name'), ev.get('team_b_name'))
         if not key:
@@ -642,6 +643,7 @@ def _pb_cached(slug):
     streams = unique
     if streams:
         _pb_cache[slug] = (now, streams)
+        _slug_streams_cache[slug] = (now, streams)
     return streams
 
 # ---------------------------------------------------------------------------
@@ -953,7 +955,7 @@ def api_custom_m3u():
             data = json.loads(CUSTOM_M3U_FILE.read_text(encoding='utf-8'))
         except (FileNotFoundError, json.JSONDecodeError):
             data = {}
-        names = {n: e['slug'] for n, e in data.items()}
+        names = {n: e.get('slug', '') for n, e in data.items()}
         return jsonify({'ok': True, 'names': names})
     body = request.get_json(silent=True) or {}
     name = (body.get('name') or '').strip().lower().replace(' ', '-')
@@ -1097,7 +1099,7 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
             if p.netloc:
                 hdrs['Referer'] = f'{p.scheme}://{p.netloc}/'
                 hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
-    for attempt in range(3):
+    for attempt in range(2):
         try:
             r = _media_sess().get(url, headers=hdrs, timeout=timeout)
             if r.status_code == 200:
@@ -1105,8 +1107,6 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
             _log.warning('proxy_fetch attempt %d: %s -> HTTP %d', attempt+1, url[:80], r.status_code)
         except Exception as e:
             _log.warning('proxy_fetch attempt %d: %s -> %s', attempt+1, url[:80], e)
-        if attempt < 2:
-            time.sleep(0.5)
     return 0, b'', ''
 
 def _build_seg_headers(url, ref=''):
@@ -1161,7 +1161,10 @@ def proxy_hls_seg():
 def proxy_hls(slug, idx):
     target = request.args.get('url', '')
     rewrite = request.args.get('rewrite', '') == '1'
-    streams = _pb_cached(slug)
+    # Fast path: use slug streams cache to avoid scanning all events
+    now_ts = time.time()
+    _ss_hit = _slug_streams_cache.get(slug)
+    streams = _ss_hit[1] if _ss_hit and now_ts - _ss_hit[0] < _SLUG_STREAMS_TTL else _pb_cached(slug)
     if not streams or idx >= len(streams):
         return jsonify({"error": "Not found"}), 404
     s = streams[idx]
@@ -1277,7 +1280,6 @@ def proxy_manifest(slug, idx):
         except Exception:
             pass
         if attempt < 2:
-            time.sleep(1)
             _pb_cache.pop(slug, None)
             streams = _pb_cached(slug)
             if streams and idx < len(streams):
@@ -1413,15 +1415,20 @@ def _warm_all():
         try:
             events = _get_events()
             if events:
+                now_ts = time.time()
                 slugs = []
                 for ev in events:
                     s = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
                     if s:
+                        hit = _pb_cache.get(s)
+                        if hit and now_ts - hit[0] < _PB_TTL:
+                            continue
                         slugs.append(s)
-                _resolve_many(slugs)
+                if slugs:
+                    _resolve_many(slugs)
         except Exception:
             pass
-        time.sleep(15)
+        time.sleep(30)
 
 threading.Thread(target=_warm_all, daemon=True).start()
 
