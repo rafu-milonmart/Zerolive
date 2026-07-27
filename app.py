@@ -144,9 +144,9 @@ def _fetch_fancode():
 _EV_TTL = 15
 _PB_TTL = 30
 _M3U_TTL = 30
-_FC_TTL = 60
-_TM_TTL = 60
-_SL_TTL = 60
+_FC_TTL = 120
+_TM_TTL = 120
+_SL_TTL = 120
 
 FC_SOURCE = 'https://raw.githubusercontent.com/srhady/Fancode-bd/refs/heads/main/main_playlist.json'
 TAPMAD_SOURCE = 'https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json'
@@ -158,7 +158,7 @@ SONYLIV_SOURCE = 'https://raw.githubusercontent.com/srhady/SonyLiv/main/sonyliv_
 
 SMSOURCE = 'https://raw.githubusercontent.com/sm-monirulislam/Upcoming-and-Live-Sports-Data/refs/heads/main/Sports_data.json'
 _sm_cache = {}
-_SM_TTL = 60
+_SM_TTL = 120
 _SM_SPORTS = {'Cricket', 'Football', 'Boxing', 'Golf', 'Tennis'}
 
 
@@ -246,12 +246,25 @@ def _fetch_sonyliv():
     return events
 
 _slug_streams_cache = {}  # slug -> (ts, streams) — fast lookup without scanning events
-_SLUG_STREAMS_TTL = 30
+_SLUG_STREAMS_TTL = 60
 
 _seg_prefetch = {}       # url -> (ts, bytes, content_type)
 _SEG_PREFETCH_TTL = 45   # seconds
-_SEG_PREFETCH_WORKERS = 16
+_SEG_PREFETCH_WORKERS = 32
 _seg_pool = ThreadPoolExecutor(max_workers=_SEG_PREFETCH_WORKERS)
+
+def _warm_slug_cache(events):
+    """Populate _slug_streams_cache for events that already have inline streams
+    (FanCode, TapMad, SonyLiv, SM Sports, IPTV). This avoids scanning all events
+    on every _resolve_one / _pb_cached call for these sources."""
+    now = time.time()
+    for ev in events:
+        slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
+        if not slug:
+            continue
+        streams = ev.get('streams', [])
+        if streams and slug not in _slug_streams_cache:
+            _slug_streams_cache[slug] = (now, streams)
 
 def _prefetch_segments(urls, ref=''):
     """Background-prefetch a list of segment URLs into _seg_prefetch cache."""
@@ -276,7 +289,7 @@ def _prefetch_segments(urls, ref=''):
                 _seg_prefetch[url] = (time.time(), r.content, r.headers.get('content-type', 'video/mp2t'))
         except Exception:
             pass
-    for u in to_fetch[:30]:
+    for u in to_fetch[:50]:
         _seg_pool.submit(_fetch_one, u)
 
 def _prefetch_hls_segments(m3u8_text, ref=''):
@@ -300,7 +313,7 @@ def _prefetch_dash_segments(mpd_text, base_url, ref=''):
     for m in re.finditer(r'<SegmentTemplate[^>]+media="([^"]+)"', mpd_text):
         urls.append(urljoin(base_url, m.group(1)))
     if urls:
-        _prefetch_segments(urls[:40], ref)
+        _prefetch_segments(urls[:50], ref)
 
 def _fetch_tapmad():
     """Fetch TapMad events and normalize."""
@@ -363,61 +376,194 @@ def _fetch_tapmad():
 
 
 IPTV_SOURCE = 'https://aeoncorex-lab.github.io/streamx-iptv-data/api/v1/categories/sports.json'
+IPTV_M3U_SOURCES = [
+    'https://aeoncorex-lab.github.io/streamx-iptv-data/playlists/bangladesh.m3u',
+    'https://aeoncorex-lab.github.io/streamx-iptv-data/playlists/usa.m3u',
+]
 _iptv_cache = {}
 _IPTV_TTL = 120  # channels rarely change
 
 
+def _parse_m3u(text, source_label=''):
+    """Parse M3U text into event dicts."""
+    events = []
+    lines = text.strip().split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith('#EXTINF:'):
+            # Extract name from after last comma
+            name = line.split(',', 1)[-1].strip() if ',' in line else ''
+            # Extract group-title
+            group = ''
+            gt = line.find('group-title="')
+            if gt >= 0:
+                gt += 13
+                ge = line.find('"', gt)
+                if ge >= 0:
+                    group = line[gt:ge]
+            # Next non-empty, non-comment line is the URL
+            i += 1
+            while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith('#')):
+                i += 1
+            url = lines[i].strip() if i < len(lines) else ''
+            if url and name:
+                ch_id = f'm3u_{source_label}_{name.lower().replace(" ", "_")}'
+                events.append({
+                    'id': ch_id,
+                    'enc_parent': ch_id,
+                    'parent': ch_id,
+                    'team_a_name': name,
+                    'team_b_name': '',
+                    'team_a_logo': '',
+                    'team_b_logo': '',
+                    'sport': group or source_label or 'Sports',
+                    'league': 'IPTV',
+                    'title': name,
+                    'status': 'LIVE',
+                    'is_iptv': True,
+                    'is_live': 1,
+                    'streams': [{
+                        'source': 'IPTV',
+                        'stream_url': url,
+                        'stream_type': 'hls',
+                        'needs_proxy': True,
+                        'referer': '',
+                    }],
+                })
+        i += 1
+    return events
+
+
+_iptv_valid_cache = {}  # url -> (ts, bool)
+_IPTV_VALID_TTL = 600  # re-validate every 10 min
+
+
+def _validate_stream(url, timeout=30):
+    """Test a single stream URL. Returns True if it responds with valid HLS-like content within timeout."""
+    now = time.time()
+    cached = _iptv_valid_cache.get(url)
+    if cached and now - cached[0] < _IPTV_VALID_TTL:
+        return cached[1]
+    try:
+        req = urllib.request.Request(url, method='GET', headers={
+            'User-Agent': 'Mozilla/5.0',
+        })
+        resp = urllib.request.urlopen(req, timeout=timeout)
+        # Read up to 4KB to check if it's valid content
+        chunk = resp.read(4096)
+        resp.close()
+        text = chunk.decode('utf-8', errors='ignore').strip()
+        # Dead: empty, error page, 404 html, binary garbage
+        if not text:
+            _iptv_valid_cache[url] = (now, False)
+            return False
+        # Valid HLS indicators
+        if text.startswith('#EXTM3U') or text.startswith('#EXTINF') or 'mpegurl' in text.lower() or '.ts' in text or '.m3u8' in text:
+            _iptv_valid_cache[url] = (now, True)
+            return True
+        # Valid if it returned content that looks like a playlist or video data
+        _iptv_valid_cache[url] = (now, True)
+        return True
+    except Exception:
+        _iptv_valid_cache[url] = (now, False)
+        return False
+
+
+def _validate_iptv_channels(events):
+    """Test all IPTV streams concurrently, drop dead channels. Returns filtered events."""
+    # Collect all stream URLs to test
+    tasks = []
+    for ev in events:
+        for s in ev.get('streams', []):
+            url = s.get('stream_url', '')
+            if url:
+                tasks.append((url, ev))
+    if not tasks:
+        return events
+    _log.info('Validating %d IPTV streams...', len(tasks))
+    valid_urls = set()
+    # Run all probes concurrently
+    with ThreadPoolExecutor(max_workers=50) as pool:
+        futures = {pool.submit(_validate_stream, url): (url, ev) for url, ev in tasks}
+        for fut in as_completed(futures):
+            url, ev = futures[fut]
+            try:
+                if fut.result():
+                    valid_urls.add(url)
+            except Exception:
+                pass
+    # Filter events: keep only those with at least one valid stream
+    filtered = []
+    for ev in events:
+        good_streams = [s for s in ev.get('streams', []) if s.get('stream_url', '') in valid_urls]
+        if good_streams:
+            ev['streams'] = good_streams
+            filtered.append(ev)
+    _log.info('IPTV validation: %d/%d streams alive, %d/%d channels passed', len(valid_urls), len(tasks), len(filtered), len(events))
+    return filtered
+
+
 def _fetch_iptv():
     """Fetch IPTV sports channels and normalize into event format."""
+    events = []
+    # JSON source
     try:
         raw = urllib.request.urlopen(IPTV_SOURCE, timeout=15).read().decode('utf-8')
         data = json.loads(raw)
         channels = data.get('channels', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        if not channels:
-            return []
-    except Exception as e:
-        _log.warning('IPTV fetch failed: %s', e)
-        return []
-    events = []
-    for ch in channels:
-        ch_id = ch.get('id', '')
-        name = ch.get('name', '').strip()
-        if not name:
-            continue
-        stream_urls = ch.get('streamUrls', [])
-        if not stream_urls:
-            continue
-        streams = []
-        for u in stream_urls:
-            if not u:
+        for ch in channels:
+            ch_id = ch.get('id', '')
+            name = ch.get('name', '').strip()
+            if not name:
                 continue
-            streams.append({
-                'source': 'IPTV',
-                'stream_url': u,
-                'stream_type': 'hls',
-                'needs_proxy': True,
-                'referer': '',
-            })
-        if not streams:
-            continue
-        logo = ch.get('logoUrl', '')
-        ev = {
-            'id': f'iptv_{ch_id}',
-            'enc_parent': f'iptv_{ch_id}',
-            'parent': f'iptv_{ch_id}',
-            'team_a_name': name,
-            'team_b_name': '',
-            'team_a_logo': logo,
-            'team_b_logo': '',
-            'sport': ch.get('genre', ch.get('category', 'Sports')),
-            'league': 'IPTV',
-            'title': name,
-            'status': 'LIVE',
-            'is_iptv': True,
-            'is_live': 1,
-            'streams': streams,
-        }
-        events.append(ev)
+            stream_urls = ch.get('streamUrls', [])
+            if not stream_urls:
+                continue
+            streams = []
+            for u in stream_urls:
+                if not u:
+                    continue
+                streams.append({
+                    'source': 'IPTV',
+                    'stream_url': u,
+                    'stream_type': 'hls',
+                    'needs_proxy': True,
+                    'referer': '',
+                })
+            if not streams:
+                continue
+            logo = ch.get('logoUrl', '')
+            ev = {
+                'id': f'iptv_{ch_id}',
+                'enc_parent': f'iptv_{ch_id}',
+                'parent': f'iptv_{ch_id}',
+                'team_a_name': name,
+                'team_b_name': '',
+                'team_a_logo': logo,
+                'team_b_logo': '',
+                'sport': ch.get('genre', ch.get('category', 'Sports')),
+                'league': 'IPTV',
+                'title': name,
+                'status': 'LIVE',
+                'is_iptv': True,
+                'is_live': 1,
+                'streams': streams,
+            }
+            events.append(ev)
+    except Exception as e:
+        _log.warning('IPTV JSON fetch failed: %s', e)
+    # M3U sources
+    for m3u_url in IPTV_M3U_SOURCES:
+        try:
+            label = m3u_url.rsplit('/', 1)[-1].replace('.m3u', '')
+            raw = urllib.request.urlopen(m3u_url, timeout=15).read().decode('utf-8')
+            events.extend(_parse_m3u(raw, label))
+        except Exception as e:
+            _log.warning('IPTV M3U fetch failed (%s): %s', m3u_url, e)
+    # Validate all channels concurrently — drop dead streams
+    if events:
+        events = _validate_iptv_channels(events)
     return events
 
 
@@ -597,6 +743,12 @@ def _pb_cached(slug):
     hit = _pb_cache.get(slug)
     if hit and now - hit[0] < _PB_TTL:
         return hit[1]
+    # Fast path for non-upstream slugs: check slug_streams_cache (O(1))
+    if slug.startswith(('fc_', 'iptv_', 'sl_', 'sm_')):
+        ss_hit = _slug_streams_cache.get(slug)
+        if ss_hit and now - ss_hit[0] < _SLUG_STREAMS_TTL:
+            _pb_cache[slug] = ss_hit
+            return ss_hit[1]
     # Find event by slug
     ev = None
     for e in _get_events():
@@ -703,6 +855,14 @@ def _decrypt(enc_b64, bucket):
         return None
 
 def _resolve_one(slug):
+    now = time.time()
+    # Fast path: check _slug_streams_cache first (O(1) lookup)
+    ss_hit = _slug_streams_cache.get(slug)
+    if ss_hit and now - ss_hit[0] < _SLUG_STREAMS_TTL:
+        for s in ss_hit[1]:
+            u = _clean_url(s.get('stream_url', ''))
+            if u:
+                return u
     # FanCode: direct HLS URL, no decryption needed
     if slug.startswith('fc_'):
         for e in _get_events():
@@ -804,7 +964,9 @@ def _get_events():
     all_events = []
     for key, _, _, _ in sources:
         all_events.extend(results.get(key) or [])
-    return _dedup_merge(all_events)
+    merged = _dedup_merge(all_events)
+    _warm_slug_cache(merged)
+    return merged
 
 @app.route('/watch/<slug>')
 def watch(slug):
@@ -842,6 +1004,9 @@ def api_playback(slug):
 def playlist_m3u():
     def _build():
         events = _get_events()
+        # Include IPTV channels
+        iptv_events = _cached('iptv', _IPTV_TTL, _fetch_iptv, _iptv_cache)
+        events = list(iptv_events) + events
         slugs, ev_map = [], {}
         for ev in events:
             s = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
@@ -861,6 +1026,19 @@ def playlist_m3u():
                 g += ' - ' + l
             lines.append(f'#EXTINF:-1 tvg-id="{slug}" tvg-name="{t}" group-title="{g}",{t}')
             lines.append(url)
+        # IPTV channels that have inline streams
+        for ev in iptv_events:
+            slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
+            if slug in ev_map:
+                continue
+            streams = ev.get('streams', [])
+            t = f"{ev.get('team_a_name', '?')} vs {ev.get('team_b_name', '?')}"
+            g = ev.get('sport', 'Sports')
+            for s in streams:
+                u = _clean_url(s.get('stream_url', ''))
+                if u:
+                    lines.append(f'#EXTINF:-1 tvg-id="{slug}" tvg-name="{t}" group-title="{g}",{t}')
+                    lines.append(u)
         return '\n'.join(lines)
     return Response(_cached('m3u', _M3U_TTL, _build, _m3u_cache), mimetype='audio/x-mpegurl')
 
@@ -983,14 +1161,17 @@ def api_events():
 
 @app.route('/api/tv-live')
 def api_tv_live():
-    """Return live events with resolved stream URLs for TV Mode."""
+    """Return live events with resolved stream URLs for TV Mode.
+    Every individual stream (Server 1, Server 2, ...) is emitted as its own card."""
     events = _get_events()
     live = [e for e in events if e.get('is_live') == 1]
     # IPTV channels — always-on, fetched separately for TV Mode only
     iptv_events = _cached('iptv', _IPTV_TTL, _fetch_iptv, _iptv_cache)
+    _warm_slug_cache(iptv_events)
     live = list(iptv_events) + live
     result = []
-    for ev in live[:50]:
+    now_ts = time.time()
+    for ev in live[:30]:
         slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
         if not slug:
             continue
@@ -998,29 +1179,34 @@ def api_tv_live():
         if ev.get('is_iptv'):
             streams = ev.get('streams', [])
         else:
-            streams = _pb_cached(slug)
+            # Fast path: try slug_streams_cache first
+            ss_hit = _slug_streams_cache.get(slug)
+            streams = ss_hit[1] if ss_hit and now_ts - ss_hit[0] < _SLUG_STREAMS_TTL else _pb_cached(slug)
         if not streams:
             continue
-        s = streams[0]
-        url = _clean_url(s.get('stream_url', ''))
-        if not url:
-            continue
-        result.append({
-            'slug': slug,
-            'team_a': ev.get('team_a_name', ''),
-            'team_b': ev.get('team_b_name', ''),
-            'team_a_logo': ev.get('team_a_logo', ''),
-            'team_b_logo': ev.get('team_b_logo', ''),
-            'sport': ev.get('sport', ''),
-            'league': ev.get('league', ''),
-            'url': url,
-            'type': s.get('stream_type', ''),
-            'drm_kid': s.get('drm_kid', ''),
-            'drm_key': s.get('drm_key', ''),
-            'needs_proxy': s.get('needs_proxy', False),
-            'referer': s.get('referer', ''),
-            'source': s.get('source', ''),
-        })
+        for si, s in enumerate(streams):
+            url = _clean_url(s.get('stream_url', ''))
+            if not url:
+                continue
+            src = s.get('source', '')
+            label = f'{src} Server {si + 1}' if len(streams) > 1 else src
+            result.append({
+                'slug': slug,
+                'stream_idx': si,
+                'team_a': ev.get('team_a_name', ''),
+                'team_b': ev.get('team_b_name', ''),
+                'team_a_logo': ev.get('team_a_logo', ''),
+                'team_b_logo': ev.get('team_b_logo', ''),
+                'sport': ev.get('sport', ''),
+                'league': ev.get('league', ''),
+                'url': url,
+                'type': s.get('stream_type', ''),
+                'drm_kid': s.get('drm_kid', ''),
+                'drm_key': s.get('drm_key', ''),
+                'needs_proxy': s.get('needs_proxy', False),
+                'referer': s.get('referer', ''),
+                'source': label or 'Unknown',
+            })
     return jsonify({'ok': True, 'streams': result})
 
 @app.route('/tv')
@@ -1134,7 +1320,7 @@ def proxy_hls_seg():
     if hit and time.time() - hit[0] < _SEG_PREFETCH_TTL:
         return Response(hit[1], status=200, headers={
             'Content-Type': hit[2], 'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'public, max-age=30', 'X-Cache': 'HIT',
+            'Cache-Control': 'public, max-age=60', 'X-Cache': 'HIT',
         })
     hdrs = _build_seg_headers(url, ref)
     for attempt in range(2):
@@ -1146,7 +1332,7 @@ def proxy_hls_seg():
                 resp_headers = {
                     'Content-Type': ct,
                     'Access-Control-Allow-Origin': '*',
-                    'Cache-Control': 'public, max-age=30',
+                    'Cache-Control': 'public, max-age=60',
                 }
                 if cl:
                     resp_headers['Content-Length'] = cl
@@ -1164,7 +1350,21 @@ def proxy_hls(slug, idx):
     # Fast path: use slug streams cache to avoid scanning all events
     now_ts = time.time()
     _ss_hit = _slug_streams_cache.get(slug)
-    streams = _ss_hit[1] if _ss_hit and now_ts - _ss_hit[0] < _SLUG_STREAMS_TTL else _pb_cached(slug)
+    streams = _ss_hit[1] if _ss_hit and now_ts - _ss_hit[0] < _SLUG_STREAMS_TTL else None
+    if not streams:
+        # Fallback: try IPTV cache directly for iptv_ slugs
+        if slug.startswith('iptv_'):
+            iptv_events = _iptv_cache.get('iptv')
+            if iptv_events and now_ts - iptv_events[0] < _IPTV_TTL:
+                for ev in iptv_events[1]:
+                    ev_slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
+                    if ev_slug == slug:
+                        streams = ev.get('streams', [])
+                        if streams:
+                            _slug_streams_cache[slug] = (now_ts, streams)
+                        break
+        if not streams:
+            streams = _pb_cached(slug)
     if not streams or idx >= len(streams):
         return jsonify({"error": "Not found"}), 404
     s = streams[idx]
@@ -1220,7 +1420,7 @@ def proxy_dash_seg(slug, idx, seg_path):
     if hit and time.time() - hit[0] < _SEG_PREFETCH_TTL:
         return Response(hit[1], status=200, headers={
             'Content-Type': hit[2], 'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'public, max-age=30', 'X-Cache': 'HIT',
+            'Cache-Control': 'public, max-age=60', 'X-Cache': 'HIT',
         })
     ua = s.get('user_agent', '') or _UA_MOBILE
     ref = s.get('referer', '') or ''
@@ -1415,6 +1615,8 @@ def _warm_all():
         try:
             events = _get_events()
             if events:
+                # Ensure all non-upstream events are in slug cache
+                _warm_slug_cache(events)
                 now_ts = time.time()
                 slugs = []
                 for ev in events:
@@ -1428,7 +1630,7 @@ def _warm_all():
                     _resolve_many(slugs)
         except Exception:
             pass
-        time.sleep(30)
+        time.sleep(15)
 
 threading.Thread(target=_warm_all, daemon=True).start()
 

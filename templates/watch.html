@@ -1736,6 +1736,28 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
 
   if(streams&&streams.length>0){loadStream(0);}else{showPlaceholder('No streams available');}
 
+  /* ---- Background proxy prewarm: prefetch proxy manifest so fallback is instant ---- */
+  function prewarmProxy(idx){
+    if(idx<0||idx>=streams.length)return;
+    var s=streams[idx];
+    var rawUrl=s.stream_url||'';
+    if(!rawUrl)return;
+    try{
+      if(s.stream_type==='dash'||rawUrl.includes('.mpd')){
+        fetch('/proxy/manifest/'+encodeURIComponent(slug)+'/'+idx+'/',{method:'HEAD',cache:'force-cache'}).catch(function(){});
+      }else{
+        var pUrl='/proxy/hls/'+encodeURIComponent(slug)+'/'+idx+'/?rewrite=1';
+        if(s.referer)pUrl+='&referer='+encodeURIComponent(s.referer);
+        fetch(pUrl,{method:'HEAD',cache:'force-cache'}).catch(function(){});
+      }
+    }catch(_){}
+  }
+  if(streams&&streams.length>1){
+    for(var pi=1;pi<Math.min(streams.length,4);pi++){
+      setTimeout(prewarmProxy.bind(null,pi),pi*500);
+    }
+  }
+
   /* ---- Live Status & Time ---- */
   var matchHeader=document.getElementById('matchHeader');
   var eventTime=document.getElementById('eventTime');
