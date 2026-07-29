@@ -375,10 +375,8 @@ def _fetch_tapmad():
     return events
 
 
-IPTV_SOURCE = 'https://aeoncorex-lab.github.io/streamx-iptv-data/api/v1/categories/sports.json'
 IPTV_M3U_SOURCES = [
-    'https://aeoncorex-lab.github.io/streamx-iptv-data/playlists/bangladesh.m3u',
-    'https://aeoncorex-lab.github.io/streamx-iptv-data/playlists/usa.m3u',
+    'https://raw.githubusercontent.com/abusaeeidx/IPTV-Scraper-Zilla/refs/heads/main/combined-playlist.m3u',
 ]
 _iptv_cache = {}
 _IPTV_TTL = 120  # channels rarely change
@@ -439,35 +437,40 @@ _iptv_valid_cache = {}  # url -> (ts, bool)
 _IPTV_VALID_TTL = 600  # re-validate every 10 min
 
 
-def _validate_stream(url, timeout=30):
-    """Test a single stream URL. Returns True if it responds with valid HLS-like content within timeout."""
+def _validate_stream(url, timeout=10):
+    """Test a single stream URL. Returns True if it responds with valid HLS content within timeout."""
     now = time.time()
     cached = _iptv_valid_cache.get(url)
     if cached and now - cached[0] < _IPTV_VALID_TTL:
         return cached[1]
+    result = False
     try:
         req = urllib.request.Request(url, method='GET', headers={
             'User-Agent': 'Mozilla/5.0',
         })
         resp = urllib.request.urlopen(req, timeout=timeout)
-        # Read up to 4KB to check if it's valid content
-        chunk = resp.read(4096)
+        ct = resp.headers.get('Content-Type', '').lower()
+        chunk = resp.read(8192)
         resp.close()
-        text = chunk.decode('utf-8', errors='ignore').strip()
-        # Dead: empty, error page, 404 html, binary garbage
-        if not text:
-            _iptv_valid_cache[url] = (now, False)
-            return False
-        # Valid HLS indicators
-        if text.startswith('#EXTM3U') or text.startswith('#EXTINF') or 'mpegurl' in text.lower() or '.ts' in text or '.m3u8' in text:
-            _iptv_valid_cache[url] = (now, True)
-            return True
-        # Valid if it returned content that looks like a playlist or video data
-        _iptv_valid_cache[url] = (now, True)
-        return True
+        # Video binary — alive
+        if 'video' in ct or 'mpeg' in ct or 'octet-stream' in ct:
+            result = True
+        elif chunk:
+            text = chunk.decode('utf-8', errors='ignore').strip()
+            if text.startswith('#EXTM3U') or text.startswith('#EXTINF'):
+                result = True
+            elif '.m3u8' in text or 'mpegurl' in ct or 'x-mpegurl' in ct:
+                result = True
+            # Binary but not text — likely .ts segment = alive
+            elif len(chunk) > 0 and not text:
+                result = True
+            # Text that's NOT HTML/JSON error page
+            elif text and not text.startswith('<') and not text.startswith('{') and not text.startswith('['):
+                result = True
     except Exception:
-        _iptv_valid_cache[url] = (now, False)
-        return False
+        pass
+    _iptv_valid_cache[url] = (now, result)
+    return result
 
 
 def _validate_iptv_channels(events):
@@ -484,7 +487,7 @@ def _validate_iptv_channels(events):
     _log.info('Validating %d IPTV streams...', len(tasks))
     valid_urls = set()
     # Run all probes concurrently
-    with ThreadPoolExecutor(max_workers=50) as pool:
+    with ThreadPoolExecutor(max_workers=100) as pool:
         futures = {pool.submit(_validate_stream, url): (url, ev) for url, ev in tasks}
         for fut in as_completed(futures):
             url, ev = futures[fut]
@@ -507,57 +510,10 @@ def _validate_iptv_channels(events):
 def _fetch_iptv():
     """Fetch IPTV sports channels and normalize into event format."""
     events = []
-    # JSON source
-    try:
-        raw = urllib.request.urlopen(IPTV_SOURCE, timeout=15).read().decode('utf-8')
-        data = json.loads(raw)
-        channels = data.get('channels', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        for ch in channels:
-            ch_id = ch.get('id', '')
-            name = ch.get('name', '').strip()
-            if not name:
-                continue
-            stream_urls = ch.get('streamUrls', [])
-            if not stream_urls:
-                continue
-            streams = []
-            for u in stream_urls:
-                if not u:
-                    continue
-                streams.append({
-                    'source': 'IPTV',
-                    'stream_url': u,
-                    'stream_type': 'hls',
-                    'needs_proxy': True,
-                    'referer': '',
-                })
-            if not streams:
-                continue
-            logo = ch.get('logoUrl', '')
-            ev = {
-                'id': f'iptv_{ch_id}',
-                'enc_parent': f'iptv_{ch_id}',
-                'parent': f'iptv_{ch_id}',
-                'team_a_name': name,
-                'team_b_name': '',
-                'team_a_logo': logo,
-                'team_b_logo': '',
-                'sport': ch.get('genre', ch.get('category', 'Sports')),
-                'league': 'IPTV',
-                'title': name,
-                'status': 'LIVE',
-                'is_iptv': True,
-                'is_live': 1,
-                'streams': streams,
-            }
-            events.append(ev)
-    except Exception as e:
-        _log.warning('IPTV JSON fetch failed: %s', e)
-    # M3U sources
     for m3u_url in IPTV_M3U_SOURCES:
         try:
             label = m3u_url.rsplit('/', 1)[-1].replace('.m3u', '')
-            raw = urllib.request.urlopen(m3u_url, timeout=15).read().decode('utf-8')
+            raw = urllib.request.urlopen(m3u_url, timeout=30).read().decode('utf-8')
             events.extend(_parse_m3u(raw, label))
         except Exception as e:
             _log.warning('IPTV M3U fetch failed (%s): %s', m3u_url, e)
