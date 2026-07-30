@@ -376,7 +376,7 @@ def _fetch_tapmad():
 
 
 IPTV_M3U_SOURCES = [
-    'https://raw.githubusercontent.com/abusaeeidx/IPTV-Scraper-Zilla/refs/heads/main/combined-playlist.m3u',
+    'playlist.m3u',
 ]
 _iptv_cache = {}
 _IPTV_TTL = 120  # channels rarely change
@@ -513,7 +513,20 @@ def _fetch_iptv():
     for m3u_url in IPTV_M3U_SOURCES:
         try:
             label = m3u_url.rsplit('/', 1)[-1].replace('.m3u', '')
-            raw = urllib.request.urlopen(m3u_url, timeout=30).read().decode('utf-8')
+            if '/' not in m3u_url:
+                label = m3u_url.replace('.m3u', '')
+            raw = ''
+            if m3u_url.startswith('file://'):
+                path = m3u_url[7:]
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        raw = f.read()
+            elif m3u_url.startswith(('http://', 'https://')):
+                raw = urllib.request.urlopen(m3u_url, timeout=30).read().decode('utf-8')
+            else:
+                if os.path.exists(m3u_url):
+                    with open(m3u_url, 'r', encoding='utf-8') as f:
+                        raw = f.read()
             events.extend(_parse_m3u(raw, label))
         except Exception as e:
             _log.warning('IPTV M3U fetch failed (%s): %s', m3u_url, e)
@@ -1127,7 +1140,7 @@ def api_tv_live():
     live = list(iptv_events) + live
     result = []
     now_ts = time.time()
-    for ev in live[:30]:
+    for ev in live:
         slug = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
         if not slug:
             continue
