@@ -239,7 +239,7 @@ function loadStream(ch, g){
   if(!url){ fail(g, 'No URL'); return; }
 
   if(Hls.isSupported() && (url.indexOf('.m3u8') > 0 || url.indexOf('.m3u') > 0)){
-    hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 90 });
+    hls = new Hls({ maxBufferLength: 60, maxMaxBufferLength: 240, maxBufferHole: 0.6, maxStarvationDelay: 8, liveSyncDuration: 8, liveMaxLatencyDuration: 45, startLevel: -1, lowLatencyMode: true, startFragPrefetch: true, fragLoadingMaxRetry: 6, fragLoadingRetryDelay: 300, fragLoadingMaxRetryTimeout: 30000, levelLoadingTimeOut: 15000, manifestLoadingTimeOut: 15000, abrEwmaDefaultEstimate: 3000000, nudgeMaxRetry: 6 });
     var done = false;
     var timeout = setTimeout(function(){
       if(g !== gen || done) return;

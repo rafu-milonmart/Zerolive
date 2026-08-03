@@ -156,11 +156,6 @@ _sl_cache = {}
 
 SONYLIV_SOURCE = 'https://raw.githubusercontent.com/srhady/SonyLiv/main/sonyliv_playlist.json'
 
-SMSOURCE = 'https://raw.githubusercontent.com/sm-monirulislam/Upcoming-and-Live-Sports-Data/refs/heads/main/Sports_data.json'
-_sm_cache = {}
-_SM_TTL = 120
-_SM_SPORTS = {'Cricket', 'Football', 'Boxing', 'Golf', 'Tennis'}
-
 
 def _fetch_sonyliv():
     """Fetch SonyLiv live matches — direct HLS URLs, no scraping needed."""
@@ -249,8 +244,8 @@ _slug_streams_cache = {}  # slug -> (ts, streams) — fast lookup without scanni
 _SLUG_STREAMS_TTL = 60
 
 _seg_prefetch = {}       # url -> (ts, bytes, content_type)
-_SEG_PREFETCH_TTL = 45   # seconds
-_SEG_PREFETCH_WORKERS = 32
+_SEG_PREFETCH_TTL = 60   # seconds
+_SEG_PREFETCH_WORKERS = 64
 _seg_pool = ThreadPoolExecutor(max_workers=_SEG_PREFETCH_WORKERS)
 
 def _warm_slug_cache(events):
@@ -289,7 +284,7 @@ def _prefetch_segments(urls, ref=''):
                 _seg_prefetch[url] = (time.time(), r.content, r.headers.get('content-type', 'video/mp2t'))
         except Exception:
             pass
-    for u in to_fetch[:50]:
+    for u in to_fetch[:64]:
         _seg_pool.submit(_fetch_one, u)
 
 def _prefetch_hls_segments(m3u8_text, ref=''):
@@ -536,84 +531,6 @@ def _fetch_iptv():
     return events
 
 
-def _fetch_sm_sports():
-    """Fetch SM Sports live/upcoming matches — direct m3u8 URLs from FanCode/TapMad CDNs."""
-    try:
-        raw = urllib.request.urlopen(SMSOURCE, timeout=15).read().decode('utf-8')
-        data = json.loads(raw)
-        items = data.get('matches', []) if isinstance(data, dict) else []
-        if not items:
-            return []
-    except Exception as e:
-        _log.warning('SMSports fetch failed: %s', e)
-        return []
-    events = []
-    for item in items:
-        cat = item.get('Category', '')
-        if cat not in _SM_SPORTS:
-            continue
-        streams_raw = item.get('streams', [])
-        if not streams_raw:
-            continue
-        status = (item.get('status', '') or '').upper()
-        ei = item.get('eventInfo', {})
-        t1 = ei.get('teamA', '') or 'TBD'
-        t2 = ei.get('teamB', '') or 'TBD'
-        if t1 == 'TBD' and t2 == 'TBD':
-            # Try parsing from event_name
-            ename = item.get('event_name', '')
-            if ' vs ' in ename or ' Vs ' in ename:
-                parts = ename.split(' vs ') if ' vs ' in ename else ename.split(' Vs ')
-                t1 = parts[0].strip() if len(parts) > 0 else 'TBD'
-                t2 = parts[1].strip() if len(parts) > 1 else 'TBD'
-        streams = []
-        for s in streams_raw:
-            url = s.get('stream_url', '')
-            if not url:
-                continue
-            # Detect stream type and required referer
-            needs_proxy = True
-            referer = ''
-            stream_type = 'hls'
-            if '.mpd' in url:
-                stream_type = 'dash'
-            if 'akamaized.net' in url:
-                referer = 'https://www.tapmad.com/'
-            elif 'fancode.com' in url:
-                referer = ''
-            streams.append({
-                'source': 'SMSports',
-                'stream_url': url,
-                'stream_type': stream_type,
-                'needs_proxy': needs_proxy,
-                'referer': referer,
-            })
-        if not streams:
-            continue
-        slug_name = f"{t1} vs {t2}" if t2 != 'TBD' else t1
-        slug_id = re.sub(r'[^a-z0-9]+', '-', slug_name.lower()).strip('-')
-        logo_a = ei.get('teamAFlag', '')
-        logo_b = ei.get('teamBFlag', '')
-        league_name = ei.get('eventName', '') or item.get('event_name', '')
-        ev = {
-            'id': f'sm_{slug_id}',
-            'enc_parent': f'sm_{slug_id}',
-            'parent': f'sm_{slug_id}',
-            'team_a_name': t1,
-            'team_b_name': t2 if t2 != 'TBD' else '',
-            'team_a_logo': logo_a,
-            'team_b_logo': logo_b,
-            'sport': cat,
-            'league': league_name,
-            'title': item.get('event_name', slug_name),
-            'status': status,
-            'is_smsports': True,
-            'is_live': 1 if status in ('LIVE', 'IN PLAY', 'IN-PLAY', 'PLAYING') else 0,
-            'streams': streams,
-        }
-        events.append(ev)
-    return events
-
 
 def _make_dedup_key(team_a, team_b):
     a = (team_a or '').lower().strip()
@@ -669,7 +586,7 @@ def _dedup_merge(all_events):
                 existing['team_a_logo'] = ev['team_a_logo']
             if not existing.get('team_b_logo') and ev.get('team_b_logo'):
                 existing['team_b_logo'] = ev['team_b_logo']
-            for flag in ('is_fancode', 'is_tapmad', 'is_sonyliv', 'is_smsports'):
+            for flag in ('is_fancode', 'is_tapmad', 'is_sonyliv'):
                 if ev.get(flag):
                     existing[flag] = True
             # Copy FanCode stream data into merged event
@@ -728,7 +645,7 @@ def _pb_cached(slug):
         return []
     # Always try upstream stream resolution (fails safely for non-upstream slugs)
     upstream_streams = []
-    is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_sonyliv') or ev.get('is_smsports')
+    is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_sonyliv')
     try:
         servers = _fetch_playback(slug)
         if servers:
@@ -913,7 +830,7 @@ def _get_events():
         ('fancode', _FC_TTL,     _fetch_fancode,   _fc_cache),
         ('tapmad',  _TM_TTL,     _fetch_tapmad,    _tm_cache),
         ('sonyliv',  _SL_TTL,    _fetch_sonyliv,   _sl_cache),
-        ('smsports', _SM_TTL,    _fetch_sm_sports,  _sm_cache),
+
     ]
     futs = {_POOL.submit(_cached, *s): s[0] for s in sources}
     results = {}

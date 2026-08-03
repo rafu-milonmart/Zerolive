@@ -960,7 +960,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
         {% if event.is_tapmad %}<span style="display:inline-block;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">TAPMAD</span>{% endif %}
 
         {% if event.is_sonyliv %}<span style="display:inline-block;background:#6366f1;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">SONYLIV</span>{% endif %}
-        {% if event.is_smsports %}<span style="display:inline-block;background:#22c55e;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">SPORTS</span>{% endif %}
+
 
         {% if event.starts_at %}<div class="time" id="eventTime"></div>{% endif %}
       </div>
@@ -1527,7 +1527,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
         function dashInit(u){
           var sp=new shaka.Player();
           player=sp;
-          var cfg={abr:{enabled:true},streaming:{bufferingGoal:15,rebufferingGoal:5}};
+          var cfg={abr:{enabled:true},streaming:{bufferingGoal:30,rebufferingGoal:10}};
           if(drmKid && drmKey){
             var kid=normHex(drmKid),key=normHex(drmKey);
             var ck={};ck[kid]=key;cfg.drm={clearKeys:ck};
@@ -1587,7 +1587,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
             L('HLS proxy URL: '+phlsUrl);
             function phProxyInit(u){
               try{player&&player.destroy&&player.destroy();}catch(_){}
-              var ph=new Hls({enableWorker:true,maxBufferLength:30,maxMaxBufferLength:120,backbufferLength:30,liveSyncDuration:5,liveMaxLatencyDuration:30,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true});
+              var ph=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:240,backbufferLength:30,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:45,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:6,fragLoadingRetryDelay:300,fragLoadingMaxRetryTimeout:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:3000000,nudgeMaxRetry:6});
               var phDone=false;
               var phTriedDirect=false;
               var t=setTimeout(function(){
@@ -1626,7 +1626,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
             var hlsUrl=rawUrl;
             function hlsInit(u){
               try{player&&player.destroy&&player.destroy();}catch(_){}
-              var h=new Hls({enableWorker:true,maxBufferLength:30,maxMaxBufferLength:120,backbufferLength:30,liveSyncDuration:5,liveMaxLatencyDuration:30,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true});
+              var h=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:240,backbufferLength:30,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:45,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:6,fragLoadingRetryDelay:300,fragLoadingMaxRetryTimeout:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:3000000,nudgeMaxRetry:6});
               var directFailed=false;
               var t=setTimeout(function(){
                 if(hlsProxyDone)return;
@@ -1894,8 +1894,8 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
     if(activeIdx<0){stallTimer=setTimeout(checkStall,5000);return;}
     var elapsed=Date.now()-lastProgress;
     var loadAge=stallCheckStart?Date.now()-stallCheckStart:0;
-    if(loadAge<8000){stallTimer=setTimeout(checkStall,5000);return;}
-    if(hasPlayed&&elapsed>10000&&video.readyState<3){
+    if(loadAge<6000){stallTimer=setTimeout(checkStall,5000);return;}
+    if(hasPlayed&&elapsed>7000&&video.readyState<3){
       isStalling=true;
       stalledIdx=activeIdx;
       var curStream=streams[activeIdx]||{};
