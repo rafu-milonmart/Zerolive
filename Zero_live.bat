@@ -22,7 +22,7 @@ rmdir /S /Q "%TEMP%\zero_live_update" >nul 2>&1
 REM Check for updates via GitHub API (no git needed)
 echo Checking for updates...
 set VERSION_FILE=%~dp0version.txt
-set GITHUB_API=https://api.github.com/repos/rafu-milonmart/my-proxy-project/commits/master
+set GITHUB_API=https://api.github.com/repos/rafu-milonmart/Zerolive/commits/master
 
 set LATEST_SHA=__FAIL__
 powershell -NoProfile -Command "try { $r = Invoke-WebRequest -Uri '%GITHUB_API%' -UseBasicParsing; Write-Output ($r.Content | ConvertFrom-Json).sha } catch { Write-Output '__FAIL__' }" > "%TEMP%\zero_live_sha.txt"
@@ -36,11 +36,11 @@ if "!LATEST_SHA!"=="!LOCAL_SHA!" goto :UP_TO_DATE
 
 echo(
 echo [UPDATE] New version found! Downloading...
-powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $z = '%TEMP%\zero_live_update.zip'; Invoke-WebRequest -Uri 'https://github.com/rafu-milonmart/my-proxy-project/archive/master.zip' -OutFile $z; Expand-Archive -Path $z -DestinationPath '%TEMP%\zero_live_update' -Force }"
+powershell -NoProfile -Command "& { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; $z = '%TEMP%\zero_live_update.zip'; Invoke-WebRequest -Uri 'https://github.com/rafu-milonmart/Zerolive/archive/master.zip' -OutFile $z; Expand-Archive -Path $z -DestinationPath '%TEMP%\zero_live_update' -Force }"
 echo [UPDATE] Applying update...
 set "PROJ_DIR=%~dp0"
 set "PROJ_DIR=!PROJ_DIR:~0,-1!"
-set "UPDATE_SRC=%TEMP%\zero_live_update\my-proxy-project-master"
+set "UPDATE_SRC=%TEMP%\zero_live_update\Zerolive-master"
 
 REM Exclude Zero_live.bat so we don't overwrite ourselves while running
 robocopy "!UPDATE_SRC!" "!PROJ_DIR!" /E /XD "python" /XF "version.txt" "Zero_live.bat" /IS /IT

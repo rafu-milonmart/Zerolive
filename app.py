@@ -23,7 +23,7 @@ DECRYPT_KEY = "ZESBtSlRTuF4Ac4k757OuasOWOA0W8LcqRn3SFgdInDoMyS8"
 STATIC_DIR = Path(__file__).parent
 VERSION_FILE = STATIC_DIR / 'version.txt'
 DEFAULT_THEME_FILE = STATIC_DIR / 'default_theme.txt'
-GITHUB_API = 'https://api.github.com/repos/rafu-milonmart/my-proxy-project'
+GITHUB_API = 'https://api.github.com/repos/rafu-milonmart/Zerolive'
 CUSTOM_M3U_FILE = STATIC_DIR / 'custom_m3u.json'
 DEBUG = os.environ.get('ZL_DEBUG', '0') == '1'
 _LAUNCH_ARGS = None  # saved by __main__ for restart
@@ -82,7 +82,9 @@ _pb_cache = {}       # slug -> (ts, streams_list)
 _manifest_cache = {} # (slug, idx) -> (ts, body)
 _m3u_cache = {}
 _hls_m3u_cache = {}  # (slug, idx, url_hash) -> (ts, rewritten_text)
-_HLS_M3U_TTL = 15   # seconds — live stream m3u8 manifest cache
+_HLS_M3U_TTL = 6    # seconds — live stream m3u8 manifest cache (short so live
+                    # playlists stay near the live edge and players don't chase
+                    # stale segments)
 _DECRYPT_KEY_CACHE = {}
 
 def _clean_url(url):
@@ -90,10 +92,26 @@ def _clean_url(url):
         return url[:url.index('|')]
     return url
 
+def _decode_hex_m3u8(hexstr):
+    """Decode a hex-encoded M3U8 master playlist into its variant stream URLs."""
+    if not hexstr:
+        return []
+    try:
+        text = bytes.fromhex(hexstr).decode('utf-8', errors='ignore')
+    except Exception:
+        return []
+    urls = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith('#'):
+            urls.append(line)
+    return urls
+
+
 def _fetch_fancode():
     """Fetch FanCode events and normalize into upstream event format."""
     try:
-        raw = urllib.request.urlopen(FC_SOURCE, timeout=10).read().decode('utf-8')
+        raw = urllib.request.urlopen(FC_SOURCE, timeout=15).read().decode('utf-8')
         data = json.loads(raw)
         items = data.get('matches', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         if not items:
@@ -114,9 +132,28 @@ def _fetch_fancode():
             t1 = item.get('event_name', t1)
             t2 = item.get('event_name', t2)
         status = (item.get('status') or '').upper()
-        stream_url = item.get('stream_url', '')
-        clearkey = item.get('clearkey', '')
-        is_drm = item.get('is_drm', False)
+        ua = item.get('user-agent') or _UA_MOBILE
+        primary = (item.get('dai_url') or '').strip() or (item.get('adfree_url') or '').strip()
+        # CDN fallbacks from hex-encoded master playlists — highest variant each
+        fallbacks = []
+        seen = set()
+        for hexkey in ('google_m3u8_hex', 'akamai_m3u8_hex'):
+            variants = _decode_hex_m3u8(item.get(hexkey, ''))
+            if not variants:
+                continue
+            chosen = variants[-1]
+            if chosen and chosen not in seen and chosen != primary:
+                seen.add(chosen)
+                fallbacks.append({
+                    'stream_url': chosen,
+                    'stream_type': 'hls',
+                    'user_agent': ua,
+                    'referer': '',
+                    'source': 'FanCode',
+                    'needs_proxy': True,
+                })
+        if not primary and fallbacks:
+            primary = fallbacks[0]['stream_url']
         ev = {
             'id': slug,
             'enc_parent': slug,
@@ -131,13 +168,12 @@ def _fetch_fancode():
             'status': status,
             'is_fancode': True,
             'is_live': 1 if status in ('LIVE', 'IN PLAY', 'IN-PLAY', 'PLAYING') else 0,
-            'fancode_stream_url': stream_url,
-            'fancode_language': item.get('language', ''),
+            'fancode_stream_url': primary,
+            'fancode_ua': ua,
+            'fancode_language': '',
         }
-        if is_drm and clearkey:
-            parts = clearkey.split(':') if ':' in clearkey else ['', clearkey]
-            ev['fancode_drm_kid'] = parts[0]
-            ev['fancode_drm_key'] = parts[1]
+        if fallbacks:
+            ev['streams'] = fallbacks
         events.append(ev)
     return events
 
@@ -148,7 +184,7 @@ _FC_TTL = 120
 _TM_TTL = 120
 _SL_TTL = 120
 
-FC_SOURCE = 'https://raw.githubusercontent.com/srhady/Fancode-bd/refs/heads/main/main_playlist.json'
+FC_SOURCE = 'https://raw.githubusercontent.com/IPTVFlixBD/Fancode-BD/refs/heads/main/data.json'
 TAPMAD_SOURCE = 'https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json'
 _fc_cache = {}
 _tm_cache = {}
@@ -244,9 +280,11 @@ _slug_streams_cache = {}  # slug -> (ts, streams) — fast lookup without scanni
 _SLUG_STREAMS_TTL = 60
 
 _seg_prefetch = {}       # url -> (ts, bytes, content_type)
-_SEG_PREFETCH_TTL = 60   # seconds
-_SEG_PREFETCH_WORKERS = 64
+_SEG_PREFETCH_TTL = 90   # seconds
+_SEG_PREFETCH_WORKERS = 128
 _seg_pool = ThreadPoolExecutor(max_workers=_SEG_PREFETCH_WORKERS)
+_seg_inflight = set()    # URLs currently being fetched (dedup)
+_seg_inflight_lock = threading.Lock()
 
 def _warm_slug_cache(events):
     """Populate _slug_streams_cache for events that already have inline streams
@@ -261,43 +299,98 @@ def _warm_slug_cache(events):
         if streams and slug not in _slug_streams_cache:
             _slug_streams_cache[slug] = (now, streams)
 
+def _lookup_streams(slug):
+    """Find inline streams for a slug across all source caches.
+    IPTV events (m3u_* ids) live outside _get_events(), so look them up in the
+    IPTV cache directly — this works even when the slug cache is cold."""
+    now = time.time()
+    hit = _slug_streams_cache.get(slug)
+    if hit and now - hit[0] < _SLUG_STREAMS_TTL:
+        return hit[1]
+    ih = _iptv_cache.get('iptv')
+    if ih:
+        for ev in ih[1]:
+            if (ev.get('enc_parent') or ev.get('parent') or ev.get('id')) == slug:
+                streams = ev.get('streams', [])
+                if streams:
+                    _slug_streams_cache[slug] = (now, streams)
+                    return streams
+    return None
+
 def _prefetch_segments(urls, ref=''):
     """Background-prefetch a list of segment URLs into _seg_prefetch cache."""
     now = time.time()
     # Evict stale entries
     stale = [k for k, v in _seg_prefetch.items() if now - v[0] > _SEG_PREFETCH_TTL * 2]
-    for k in stale[:50]:
+    for k in stale[:100]:
         _seg_prefetch.pop(k, None)
-    to_fetch = []
-    for u in urls:
-        hit = _seg_prefetch.get(u)
-        if hit and now - hit[0] < _SEG_PREFETCH_TTL:
-            continue
-        to_fetch.append(u)
+    with _seg_inflight_lock:
+        to_fetch = []
+        for u in urls:
+            hit = _seg_prefetch.get(u)
+            if hit and now - hit[0] < _SEG_PREFETCH_TTL:
+                continue
+            if u in _seg_inflight:
+                continue
+            to_fetch.append(u)
+            _seg_inflight.add(u)
     if not to_fetch:
         return
     def _fetch_one(url):
         try:
             hdrs = _build_seg_headers(url, ref)
-            r = _media_sess().get(url, headers=hdrs, timeout=10)
+            r = _media_get(url, headers=hdrs, timeout=10)
             if r.status_code == 200:
                 _seg_prefetch[url] = (time.time(), r.content, r.headers.get('content-type', 'video/mp2t'))
         except Exception:
             pass
-    for u in to_fetch[:64]:
+        finally:
+            with _seg_inflight_lock:
+                _seg_inflight.discard(url)
+    for u in to_fetch[:128]:
         _seg_pool.submit(_fetch_one, u)
 
-def _prefetch_hls_segments(m3u8_text, ref=''):
-    """Parse rewritten m3u8, extract segment URLs, prefetch them in background."""
+def _prefetch_hls_segments(m3u8_text, ref='', slug='', idx=0, warm_segments=True):
+    """Parse rewritten m3u8, extract segment URLs, prefetch them in background.
+    Also prefetches referenced sub-playlists so the variant manifests are already
+    cached + their segments warmed when the player asks for them.
+    warm_segments=False only cascades the sub-playlists (cheap) — used by the
+    background pre-warm loop so unwatched streams keep fresh manifests without
+    continuously fetching their segments."""
     urls = []
+    subpls = []
     for line in m3u8_text.split('\n'):
         s = line.strip()
-        if s and not s.startswith('#') and '/proxy/hls/seg/' in s:
-            m = re.search(r'[?&]url=([^&]+)', s)
-            if m:
-                urls.append(unquote(m.group(1)))
-    if urls:
+        if not s or s.startswith('#'):
+            continue
+        m = re.search(r'[?&]url=([^&]+)', s)
+        if not m:
+            continue
+        if '/proxy/hls/seg/' in s:
+            urls.append(unquote(m.group(1)))
+        elif slug and '/proxy/hls/' in s:
+            subpls.append(unquote(m.group(1)))
+    if warm_segments and urls:
         _prefetch_segments(urls, ref)
+    if subpls:
+        for u in subpls[:6]:
+            _seg_pool.submit(_prefetch_variant_manifest, u, ref, slug, idx, warm_segments)
+
+def _prefetch_variant_manifest(url, ref, slug, idx, warm_segments=True):
+    """Background: fetch a sub-playlist like the proxy would, cache its rewritten
+    form and prefetch its segments so the player gets instant fallback."""
+    try:
+        code, body, ct = _proxy_fetch(url, _UA_MOBILE, ref, 10)
+        if code != 200:
+            return
+        text = body.decode('utf-8', errors='replace')
+        if not text.lstrip().startswith('#EXT'):
+            return
+        rewritten = _hls_rewrite_proxy(text, url, slug, idx, ref)
+        _hls_m3u_cache[(slug, idx, url)] = (time.time(), rewritten)
+        _prefetch_hls_segments(rewritten, ref, slug, idx, warm_segments)
+    except Exception:
+        pass
 
 def _prefetch_dash_segments(mpd_text, base_url, ref=''):
     """Parse DASH manifest, extract segment URLs, prefetch them in background."""
@@ -309,6 +402,49 @@ def _prefetch_dash_segments(mpd_text, base_url, ref=''):
         urls.append(urljoin(base_url, m.group(1)))
     if urls:
         _prefetch_segments(urls[:50], ref)
+
+def _prefetch_stream_proxy(slug, idx, s, warm_segments=True, min_age=0):
+    """Background: fetch the upstream manifest for a stream, cache its rewritten
+    proxy copy and prefetch its segments. Runs before the player even requests the
+    manifest, so first playback starts from cache with zero upstream round-trip.
+    warm_segments=False skips segment prefetch; min_age>0 skips the refetch when
+    the cached manifest is still newer than min_age seconds (used by the
+    background pre-warm loop to bound upstream load)."""
+    if not s:
+        return
+    try:
+        raw = _clean_url(s.get('stream_url', ''))
+        if not raw or ('.m3u8' not in raw and '.mpd' not in raw):
+            return
+        ref = s.get('referer', '') or ''
+        if 'tapmad' in raw.lower():
+            ref = ref or 'https://www.tapmad.com/'
+        ua = s.get('user_agent', '') or _UA_MOBILE
+        now = time.time()
+        if min_age > 0:
+            hit = _hls_m3u_cache.get((slug, idx, raw))
+            if hit and now - hit[0] < max(min_age, _HLS_M3U_TTL):
+                if warm_segments:
+                    _prefetch_hls_segments(hit[1], ref, slug, idx)
+                return
+        if '.mpd' in raw:
+            code, body, ct = _proxy_fetch(raw, ua, ref, 10)
+            if code == 200:
+                _manifest_cache[(slug, idx)] = (time.time(), body)
+                base_dir = raw[:raw.rfind('/') + 1]
+                _prefetch_dash_segments(body, base_dir, ref)
+            return
+        code, body, ct = _proxy_fetch(raw, ua, ref, 10)
+        if code != 200:
+            return
+        text = body.decode('utf-8', errors='replace')
+        if not text.lstrip().startswith('#EXT'):
+            return
+        rewritten = _hls_rewrite_proxy(text, raw, slug, idx, ref)
+        _hls_m3u_cache[(slug, idx, raw)] = (time.time(), rewritten)
+        _prefetch_hls_segments(rewritten, ref, slug, idx, warm_segments)
+    except Exception:
+        pass
 
 def _fetch_tapmad():
     """Fetch TapMad events and normalize."""
@@ -372,9 +508,11 @@ def _fetch_tapmad():
 
 IPTV_M3U_SOURCES = [
     'playlist.m3u',
+    'sportzfy_live.m3u',
 ]
 _iptv_cache = {}
-_IPTV_TTL = 120  # channels rarely change
+_iptv_fetch_lock = threading.Lock()
+_IPTV_TTL = 300  # channels rarely change
 
 
 def _parse_m3u(text, source_label=''):
@@ -395,6 +533,14 @@ def _parse_m3u(text, source_label=''):
                 ge = line.find('"', gt)
                 if ge >= 0:
                     group = line[gt:ge]
+            # Extract tvg-logo
+            logo = ''
+            lg = line.find('tvg-logo="')
+            if lg >= 0:
+                lg += 10
+                le = line.find('"', lg)
+                if le >= 0:
+                    logo = line[lg:le]
             # Next non-empty, non-comment line is the URL
             i += 1
             while i < len(lines) and (not lines[i].strip() or lines[i].strip().startswith('#')):
@@ -408,7 +554,7 @@ def _parse_m3u(text, source_label=''):
                     'parent': ch_id,
                     'team_a_name': name,
                     'team_b_name': '',
-                    'team_a_logo': '',
+                    'team_a_logo': logo,
                     'team_b_logo': '',
                     'sport': group or source_label or 'Sports',
                     'league': 'IPTV',
@@ -481,16 +627,21 @@ def _validate_iptv_channels(events):
         return events
     _log.info('Validating %d IPTV streams...', len(tasks))
     valid_urls = set()
-    # Run all probes concurrently
-    with ThreadPoolExecutor(max_workers=100) as pool:
-        futures = {pool.submit(_validate_stream, url): (url, ev) for url, ev in tasks}
-        for fut in as_completed(futures):
+    # Run all probes concurrently, but never block a request longer than 8s.
+    # In-flight probes finish in the background and populate _iptv_valid_cache.
+    pool = ThreadPoolExecutor(max_workers=100)
+    futures = {pool.submit(_validate_stream, url): (url, ev) for url, ev in tasks}
+    try:
+        for fut in as_completed(futures, timeout=8):
             url, ev = futures[fut]
             try:
                 if fut.result():
                     valid_urls.add(url)
             except Exception:
                 pass
+    except TimeoutError:
+        pass
+    pool.shutdown(wait=False)
     # Filter events: keep only those with at least one valid stream
     filtered = []
     for ev in events:
@@ -504,6 +655,15 @@ def _validate_iptv_channels(events):
 
 def _fetch_iptv():
     """Fetch IPTV sports channels and normalize into event format."""
+    with _iptv_fetch_lock:
+        # Another thread may have filled the cache while we waited for the lock
+        hit = _iptv_cache.get('iptv')
+        if hit and time.time() - hit[0] < _IPTV_TTL:
+            return hit[1]
+        events = _parse_iptv_events()
+    return events
+
+def _parse_iptv_events():
     events = []
     for m3u_url in IPTV_M3U_SOURCES:
         try:
@@ -592,7 +752,7 @@ def _dedup_merge(all_events):
             # Copy FanCode stream data into merged event
             if ev.get('is_fancode') and ev.get('fancode_stream_url'):
                 existing['fancode_stream_url'] = ev['fancode_stream_url']
-            for k in ('fancode_drm_kid', 'fancode_drm_key', 'fancode_language'):
+            for k in ('fancode_drm_kid', 'fancode_drm_key', 'fancode_language', 'fancode_ua'):
                 if ev.get(k) and not existing.get(k):
                     existing[k] = ev[k]
             # If upstream event merged into a new-source event, swap key to
@@ -630,11 +790,16 @@ def _pb_cached(slug):
     if hit and now - hit[0] < _PB_TTL:
         return hit[1]
     # Fast path for non-upstream slugs: check slug_streams_cache (O(1))
-    if slug.startswith(('fc_', 'iptv_', 'sl_', 'sm_')):
+    if slug.startswith(('fc_', 'iptv_', 'sl_', 'sm_', 'm3u_')):
         ss_hit = _slug_streams_cache.get(slug)
         if ss_hit and now - ss_hit[0] < _SLUG_STREAMS_TTL:
             _pb_cache[slug] = ss_hit
             return ss_hit[1]
+        # IPTV inline streams are kept out of _get_events() — scan the IPTV cache
+        inline = _lookup_streams(slug)
+        if inline:
+            _pb_cache[slug] = (now, inline)
+            return inline
     # Find event by slug
     ev = None
     for e in _get_events():
@@ -659,7 +824,7 @@ def _pb_cached(slug):
     if ev.get('is_fancode'):
         stream_url = ev.get('fancode_stream_url', '')
         if stream_url:
-            s = {'stream_url': stream_url, 'stream_type': 'hls', 'user_agent': _UA_MOBILE, 'referer': '', 'source': 'FanCode', 'needs_proxy': True}
+            s = {'stream_url': stream_url, 'stream_type': 'hls', 'user_agent': ev.get('fancode_ua') or _UA_MOBILE, 'referer': '', 'source': 'FanCode', 'needs_proxy': True}
             if ev.get('fancode_drm_kid'):
                 s['drm_kid'] = ev['fancode_drm_kid']
                 s['drm_key'] = ev['fancode_drm_key']
@@ -692,10 +857,42 @@ def _sess():
         _tlocal.session = curl_requests.Session(headers=_http_headers, impersonate="chrome124", timeout=15)
     return _tlocal.session
 
-def _media_sess():
-    if not hasattr(_tlocal, "media_session"):
-        _tlocal.media_session = curl_requests.Session(headers=_media_headers, impersonate="chrome124", timeout=30)
-    return _tlocal.media_session
+_MEDIA_POOL_SIZE = 32
+_MEDIA_POOL = []        # list of (session, threading.Lock) — warm keep-alive connections
+_MEDIA_POOL_LOCK = threading.Lock()
+_MEDIA_RR = 0
+
+def _acquire_media_session():
+    """Round-robin pick of a warm pooled session. Pre-created lazily on first use."""
+    global _MEDIA_RR
+    with _MEDIA_POOL_LOCK:
+        if not _MEDIA_POOL:
+            for _ in range(_MEDIA_POOL_SIZE):
+                _MEDIA_POOL.append((
+                    curl_requests.Session(headers=_media_headers, impersonate="chrome124", timeout=30),
+                    threading.Lock(),
+                ))
+        _MEDIA_RR = (_MEDIA_RR + 1) % len(_MEDIA_POOL)
+        return _MEDIA_POOL[_MEDIA_RR]
+
+def _media_get(url, headers, timeout=15):
+    """Thread-safe CDN fetch through warm pooled sessions (keep-alive — no per-request
+    TLS handshake). If every pooled session is busy, fall back to a one-off session so
+    playback never blocks on pool contention."""
+    sess, lock = _acquire_media_session()
+    if lock.acquire(blocking=False):
+        try:
+            return sess.get(url, headers=headers, timeout=timeout)
+        finally:
+            lock.release()
+    one = curl_requests.Session(headers=_media_headers, impersonate="chrome124", timeout=timeout)
+    try:
+        return one.get(url, headers=headers, timeout=timeout)
+    finally:
+        try:
+            one.close()
+        except Exception:
+            pass
 
 def _http_get(url, raw=False):
     for attempt in range(2):
@@ -755,29 +952,11 @@ def _resolve_one(slug):
             if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
                 return e.get('fancode_stream_url') or None
         return None
-    # IPTV: direct HLS URL, no upstream
-    if slug.startswith('iptv_'):
-        for e in _get_events():
-            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
-                streams = e.get('streams', [])
-                if streams:
-                    return _clean_url(streams[0].get('stream_url', ''))
-        return None
-    # SonyLiv: direct HLS URL, no upstream
-    if slug.startswith('sl_'):
-        for e in _get_events():
-            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
-                streams = e.get('streams', [])
-                if streams:
-                    return _clean_url(streams[0].get('stream_url', ''))
-        return None
-    # SM Sports: direct HLS URL, no upstream
-    if slug.startswith('sm_'):
-        for e in _get_events():
-            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
-                streams = e.get('streams', [])
-                if streams:
-                    return _clean_url(streams[0].get('stream_url', ''))
+    # IPTV / SonyLiv / SM Sports: direct HLS URL, no upstream (handles cold cache)
+    if slug.startswith(('iptv_', 'sl_', 'sm_', 'm3u_')):
+        inline = _lookup_streams(slug)
+        if inline:
+            return _clean_url(inline[0].get('stream_url', '')) or None
         return None
     streams = _pb_cached(slug)
     for s in streams:
@@ -865,6 +1044,10 @@ def watch(slug):
             event = e
             break
     sport = (event or {}).get('sport', '')
+    # Background-prefetch manifest + segments for the primary stream so the
+    # player's first manifest/segment requests hit warm caches.
+    if streams:
+        _POOL.submit(_prefetch_stream_proxy, slug, 0, streams[0])
     return render_template('watch.html', slug=slug, event=event, streams=streams, sport=sport)
 
 @app.route('/stream/<slug>/<int:idx>')
@@ -892,6 +1075,7 @@ def playlist_m3u():
         events = _get_events()
         # Include IPTV channels
         iptv_events = _cached('iptv', _IPTV_TTL, _fetch_iptv, _iptv_cache)
+        _warm_slug_cache(iptv_events)
         events = list(iptv_events) + events
         slugs, ev_map = [], {}
         for ev in events:
@@ -1173,7 +1357,7 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
                 hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
     for attempt in range(2):
         try:
-            r = _media_sess().get(url, headers=hdrs, timeout=timeout)
+            r = _media_get(url, headers=hdrs, timeout=timeout)
             if r.status_code == 200:
                 return r.status_code, r.content, r.headers.get('content-type', '')
             _log.warning('proxy_fetch attempt %d: %s -> HTTP %d', attempt+1, url[:80], r.status_code)
@@ -1205,13 +1389,31 @@ def proxy_hls_seg():
     hit = _seg_prefetch.get(url)
     if hit and time.time() - hit[0] < _SEG_PREFETCH_TTL:
         return Response(hit[1], status=200, headers={
-            'Content-Type': hit[2], 'Access-Control-Allow-Origin': '*',
+            'Content-Type': hit[2], 'Content-Length': str(len(hit[1])),
+            'Access-Control-Allow-Origin': '*',
             'Cache-Control': 'public, max-age=60', 'X-Cache': 'HIT',
         })
     hdrs = _build_seg_headers(url, ref)
     for attempt in range(2):
+        sess, lock = _acquire_media_session()
+        _one_off = not lock.acquire(blocking=False)
+        if _one_off:
+            sess = curl_requests.Session(headers=_media_headers, impersonate="chrome124", timeout=12)
+
+        def _release():
+            if _one_off:
+                try:
+                    sess.close()
+                except Exception:
+                    pass
+            else:
+                try:
+                    lock.release()
+                except Exception:
+                    pass
+
         try:
-            r = _media_sess().get(url, headers=hdrs, timeout=12, stream=True)
+            r = sess.get(url, headers=hdrs, timeout=12, stream=True)
             if r.status_code == 200:
                 ct = r.headers.get('content-type', 'video/mp2t')
                 cl = r.headers.get('content-length', '')
@@ -1222,10 +1424,19 @@ def proxy_hls_seg():
                 }
                 if cl:
                     resp_headers['Content-Length'] = cl
-                return Response(r.iter_content(chunk_size=65536), status=200,
-                                headers=resp_headers)
+
+                def _stream_body(_r=r, _rel=_release):
+                    try:
+                        for chunk in _r.iter_content(chunk_size=65536):
+                            yield chunk
+                    finally:
+                        _rel()
+
+                return Response(_stream_body(), status=200, headers=resp_headers)
+            _release()
             _log.debug('seg_proxy attempt %d: %s -> HTTP %d', attempt+1, url[:80], r.status_code)
         except Exception as e:
+            _release()
             _log.debug('seg_proxy attempt %d: %s -> %s', attempt+1, url[:80], e)
     return jsonify({"error": "Upstream failed"}), 502
 
@@ -1238,8 +1449,8 @@ def proxy_hls(slug, idx):
     _ss_hit = _slug_streams_cache.get(slug)
     streams = _ss_hit[1] if _ss_hit and now_ts - _ss_hit[0] < _SLUG_STREAMS_TTL else None
     if not streams:
-        # Fallback: try IPTV cache directly for iptv_ slugs
-        if slug.startswith('iptv_'):
+        # Fallback: try IPTV cache directly for IPTV slugs
+        if slug.startswith(('iptv_', 'm3u_')):
             iptv_events = _iptv_cache.get('iptv')
             if iptv_events and now_ts - iptv_events[0] < _IPTV_TTL:
                 for ev in iptv_events[1]:
@@ -1265,13 +1476,13 @@ def proxy_hls(slug, idx):
     if not ref and ('akamaized.net' in target or 'tapmad' in target.lower()):
         ref = 'https://www.tapmad.com/'
     ua = request.args.get('user_agent', '') or s.get('user_agent', '') or _UA_MOBILE
-    _log.info('proxy_hls: slug=%s idx=%d target=%s ref=%s rewrite=%s', slug, idx, target[:80], ref[:40] if ref else '-', rewrite)
-    cache_key = (slug, idx, hash(target))
+    _log.debug('proxy_hls: slug=%s idx=%d target=%s ref=%s rewrite=%s', slug, idx, target[:80], ref[:40] if ref else '-', rewrite)
+    cache_key = (slug, idx, target)
     now = time.time()
     if rewrite:
         hit = _hls_m3u_cache.get(cache_key)
         if hit and now - hit[0] < _HLS_M3U_TTL:
-            _prefetch_hls_segments(hit[1], ref)
+            _prefetch_hls_segments(hit[1], ref, slug, idx)
             return Response(hit[1], content_type='application/vnd.apple.mpegurl')
     code, body, ct = _proxy_fetch(target, ua, ref, 15)
     if code == 200:
@@ -1281,10 +1492,10 @@ def proxy_hls(slug, idx):
             if rewrite:
                 rewritten = _hls_rewrite_proxy(text, target, slug, idx, ref)
                 _hls_m3u_cache[cache_key] = (now, rewritten)
-                _prefetch_hls_segments(rewritten, ref)
+                _prefetch_hls_segments(rewritten, ref, slug, idx)
                 return Response(rewritten, content_type='application/vnd.apple.mpegurl')
             normal = _hls_rewrite(text, target[:target.rfind('/') + 1])
-            _prefetch_hls_segments(normal, ref)
+            _prefetch_hls_segments(normal, ref, slug, idx)
             return Response(normal, content_type='application/vnd.apple.mpegurl')
         return Response(body, content_type=ct or 'application/octet-stream')
     return jsonify({"error": "Upstream failed"}), 502
@@ -1343,7 +1554,7 @@ def proxy_manifest(slug, idx):
             if ref:
                 hdrs['Referer'] = ref
                 hdrs['Origin'] = ref.rstrip('/')
-            r = _media_sess().get(url, headers=hdrs, timeout=15)
+            r = _media_get(url, headers=hdrs, timeout=15)
             if r.status_code == 200:
                 body = r.text
             else:
@@ -1500,18 +1711,35 @@ def _warm_all():
     while True:
         try:
             events = _get_events()
+            # IPTV channels live outside _get_events() — keep them warm too
+            try:
+                iptv_events = _cached('iptv', _IPTV_TTL, _fetch_iptv, _iptv_cache)
+                if iptv_events:
+                    _warm_slug_cache(iptv_events)
+            except Exception:
+                pass
             if events:
                 # Ensure all non-upstream events are in slug cache
                 _warm_slug_cache(events)
                 now_ts = time.time()
                 slugs = []
+                warmed = 0
                 for ev in events:
                     s = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
-                    if s:
-                        hit = _pb_cache.get(s)
-                        if hit and now_ts - hit[0] < _PB_TTL:
-                            continue
-                        slugs.append(s)
+                    if not s:
+                        continue
+                    # Keep manifest + variant playlists of live proxy streams warm
+                    # (master only, no segment spam) so match pages open instantly.
+                    if warmed < 20 and ev.get('is_live') == 1:
+                        streams = ev.get('streams') or _pb_cache.get(s, (0, []))[1] or []
+                        if streams:
+                            _POOL.submit(_prefetch_stream_proxy, s, 0, streams[0],
+                                         warm_segments=False, min_age=20)
+                            warmed += 1
+                    hit = _pb_cache.get(s)
+                    if hit and now_ts - hit[0] < _PB_TTL:
+                        continue
+                    slugs.append(s)
                 if slugs:
                     _resolve_many(slugs)
         except Exception:

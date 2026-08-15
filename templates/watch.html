@@ -1031,6 +1031,9 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
   var streams = {{ streams | tojson }};
   var slug = '{{ slug }}';
   var isFancode = slug.indexOf('fc_') === 0;
+  var isTapmad = slug.indexOf('tm_') === 0;
+  var hlsCfg = {enableWorker:true,maxBufferLength:90,maxMaxBufferLength:360,backbufferLength:60,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:60,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:8,fragLoadingRetryDelay:200,fragLoadingMaxRetryTimeout:40000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:5000000,nudgeMaxRetry:6,maxFragLookUpTolerance:0.25};
+  if(isTapmad){hlsCfg.liveSyncDuration=5;hlsCfg.liveMaxLatencyDuration=25;hlsCfg.backbufferLength=30;hlsCfg.maxBufferLength=60;}
   var player = null;
   var activeIdx = -1;
   var lastProgress = 0;
@@ -1587,7 +1590,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
             L('HLS proxy URL: '+phlsUrl);
             function phProxyInit(u){
               try{player&&player.destroy&&player.destroy();}catch(_){}
-              var ph=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:240,backbufferLength:30,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:45,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:6,fragLoadingRetryDelay:300,fragLoadingMaxRetryTimeout:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:3000000,nudgeMaxRetry:6});
+              var ph=new Hls(Object.assign({},hlsCfg));
               var phDone=false;
               var phTriedDirect=false;
               var t=setTimeout(function(){
@@ -1626,7 +1629,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
             var hlsUrl=rawUrl;
             function hlsInit(u){
               try{player&&player.destroy&&player.destroy();}catch(_){}
-              var h=new Hls({enableWorker:true,maxBufferLength:60,maxMaxBufferLength:240,backbufferLength:30,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:45,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:6,fragLoadingRetryDelay:300,fragLoadingMaxRetryTimeout:30000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:3000000,nudgeMaxRetry:6});
+              var h=new Hls(Object.assign({},hlsCfg));
               var directFailed=false;
               var t=setTimeout(function(){
                 if(hlsProxyDone)return;
@@ -1734,7 +1737,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
     });
   }
 
-  if(streams&&streams.length>0){loadStream(0);}else{showPlaceholder('No streams available');}
+  if(streams&&streams.length>0){prewarmProxy(0);loadStream(0);}else{showPlaceholder('No streams available');}
 
   /* ---- Background proxy prewarm: prefetch proxy manifest so fallback is instant ---- */
   function prewarmProxy(idx){

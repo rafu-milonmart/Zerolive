@@ -10,9 +10,9 @@
 
 ### Option 1: Installer (Windows)
 
-1. Download **ZeroLive_Installer.exe** from the [download page](https://zerolive.page.gd/download.html) or any of the [official mirrors](#official-download-mirrors)
-2. Run the EXE — pick your theme & install path (default: `C:\Zero_live`)
-3. Click **Launch** — your browser opens to `http://127.0.0.1:9090`
+1. Download **ZeroLive_Install.bat** from the [download page](https://zerolive.page.gd/download.html) or any of the [official mirrors](#official-download-mirrors)
+2. Run the BAT — it bundles a portable Python, installs dependencies, and sets up ZeroLive (default: `C:\Zero_live`)
+3. It launches your browser to `http://127.0.0.1:9090` when done
 
 ### Option 2: Manual (any OS)
 
@@ -155,7 +155,7 @@ Events from multiple sources (upstream, FanCode, TapMad) are merged by fuzzy tea
 | **Server** | Hypercorn (ASGI, 4 workers) → gunicorn gthread (4w×8t) → Flask dev fallback |
 | **Player** | hls.js, dash.js, native HTML5 video |
 | **Frontend** | Vanilla JS, CSS custom properties (11 themes), glassmorphism, SVG controls |
-| **Installer** | PyQt6 GUI → PyInstaller → `ZeroLive_Installer.exe` (~35 MB) |
+| **Installer** | Portable `.bat` — downloads embedded Python, installs deps, creates shortcuts |
 | **Deploy** | Embedded portable Python (no registry/PATH pollution), robocopy updates |
 
 ---
