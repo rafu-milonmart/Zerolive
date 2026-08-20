@@ -7,8 +7,11 @@ from curl_cffi import requests as curl_requests
 from asgiref.wsgi import WsgiToAsgi
 
 os.environ['PYTHONUNBUFFERED'] = '1'
-sys.stdout.reconfigure(encoding='utf-8', line_buffering=False)
-sys.stderr.reconfigure(encoding='utf-8', line_buffering=False)
+try:
+    sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
+    sys.stderr.reconfigure(encoding='utf-8', line_buffering=True)
+except Exception:
+    pass
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     HAS_CRYPTO = True
@@ -430,9 +433,9 @@ def _prefetch_stream_proxy(slug, idx, s, warm_segments=True, min_age=0):
         if '.mpd' in raw:
             code, body, ct = _proxy_fetch(raw, ua, ref, 10)
             if code == 200:
-                _manifest_cache[(slug, idx)] = (time.time(), body)
+                _manifest_cache[(slug, idx)] = (time.time(), body if isinstance(body, str) else body.decode('utf-8', errors='replace'))
                 base_dir = raw[:raw.rfind('/') + 1]
-                _prefetch_dash_segments(body, base_dir, ref)
+                _prefetch_dash_segments(body.decode('utf-8', errors='replace') if isinstance(body, bytes) else body, base_dir, ref)
             return
         code, body, ct = _proxy_fetch(raw, ua, ref, 10)
         if code != 200:
@@ -963,7 +966,7 @@ def _resolve_one(slug):
         u = _clean_url(s.get('stream_url', ''))
         if '.m3u8' in u:
             return u
-    return _clean_url(streams[0]['stream_url']) if streams else None
+    return _clean_url(streams[0].get('stream_url', '')) if streams else None
 
 def _resolve_many(slugs):
     if not slugs:
@@ -1284,17 +1287,6 @@ def tv_mode():
     """TV Mode — multi-channel viewer."""
     return render_template('tv.html')
 
-@app.route('/api/<path:subpath>')
-def proxy_api(subpath):
-    if '..' in subpath or '~' in subpath:
-        return jsonify({"error": "Forbidden"}), 403
-    url = f"{UPSTREAM}/api/{subpath}"
-    qs = request.query_string
-    if qs:
-        url += '?' + (qs.decode() if isinstance(qs, bytes) else qs)
-    st, body = _http_get(url)
-    return Response(body, status=st or 502, content_type='application/json')
-
 def _hls_rewrite(body, base_dir):
     lines = body.split('\n')
     out = []
@@ -1527,7 +1519,7 @@ def proxy_dash_seg(slug, idx, seg_path):
     code, body, ct = _proxy_fetch(target, ua, ref, 10)
     if code == 200:
         return Response(body, content_type=ct or 'application/octet-stream')
-    return redirect(target)
+    return jsonify({"error": "Upstream failed"}), 502
 
 @app.route('/proxy/manifest/<slug>/<int:idx>/')
 @app.route('/proxy/manifest/<slug>/<int:idx>')
@@ -1587,8 +1579,8 @@ def proxy_manifest(slug, idx):
 @app.route('/proxy/manifest/<slug>/<int:idx>/<path:seg_path>')
 def proxy_manifest_seg(slug, idx, seg_path):
     """Serve DASH segments requested relative to manifest URL."""
-    from flask import redirect as _rd
-    return _rd(f'/proxy/dashseg/{slug}/{idx}/{seg_path}{"?%s" % request.query_string.decode() if request.query_string else ""}')
+    qs = request.query_string.decode('utf-8', errors='replace') if request.query_string else ''
+    return redirect(f'/proxy/dashseg/{slug}/{idx}/{seg_path}{"?" + qs if qs else ""}')
 
 # ---------------------------------------------------------------------------
 # Version / Update
@@ -1624,7 +1616,10 @@ def update_apply():
             z = zipfile.ZipFile(io.BytesIO(f.read()))
             staging = Path(tempfile.mkdtemp())
             z.extractall(staging)
-            src = next(p for p in staging.iterdir() if p.is_dir())
+            dirs = [p for p in staging.iterdir() if p.is_dir()]
+            if not dirs:
+                return jsonify({'ok': False, 'error': 'Update archive has no source directory'})
+            src = dirs[0]
             # Save staging path — restart will apply
             STAGING.write_text(str(src))
         return jsonify({'ok': True, 'message': 'Update ready. Restart to apply.'})
@@ -1703,6 +1698,17 @@ def update_restart():
         os._exit(0)
     threading.Thread(target=_do_restart).start()
     return jsonify({'ok': True, 'message': 'Restarting...'})
+
+@app.route('/api/<path:subpath>')
+def proxy_api(subpath):
+    if '..' in subpath or '~' in subpath:
+        return jsonify({"error": "Forbidden"}), 403
+    url = f"{UPSTREAM}/api/{subpath}"
+    qs = request.query_string
+    if qs:
+        url += '?' + (qs.decode('utf-8', errors='replace') if isinstance(qs, bytes) else qs)
+    st, body = _http_get(url)
+    return Response(body, status=st or 502, content_type='application/json')
 
 # ---------------------------------------------------------------------------
 # Background pre-warm — fetch ALL events + ALL playback on loop

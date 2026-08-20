@@ -74,12 +74,11 @@ REM Start app (loop so in-app restart works)
 set BROWSER_OPENED=0
 :RESTART
 set PORT=9090
-"%PYTHON%" app.py
 if "%BROWSER_OPENED%"=="0" (
   set BROWSER_OPENED=1
-  timeout /t 2 /nobreak >nul
-  start /b "" http://127.0.0.1:9090
+  start /b cmd /c "timeout /t 3 /nobreak >nul && start http://127.0.0.1:9090"
 )
+"%PYTHON%" app.py
 REM Apply new bat if one was saved during update
 if exist "%~dp0Zero_live.bat.new" (
     move /Y "%~dp0Zero_live.bat.new" "%~dp0Zero_live.bat" >nul
@@ -87,4 +86,4 @@ if exist "%~dp0Zero_live.bat.new" (
 )
 echo App exited (code !errorlevel!). Restarting in 3s...
 timeout /t 3 /nobreak >nul
-goto RESTART
+goto :RESTART

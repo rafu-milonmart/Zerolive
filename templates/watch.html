@@ -1128,7 +1128,6 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
   var progressTooltip = document.getElementById('progressTooltip');
   var currentTimeEl = document.getElementById('currentTime');
   var totalTimeEl = document.getElementById('totalTime');
-  var timeSep = document.querySelector('.time-display .sep');
   var volumeBtn = document.getElementById('volumeBtn');
   var volumeRange = document.getElementById('volumeRange');
   var volumeSlider = document.getElementById('volumeSlider');
@@ -1737,6 +1736,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
     });
   }
 
+  var stallCheckStart;
   if(streams&&streams.length>0){prewarmProxy(0);loadStream(0);}else{showPlaceholder('No streams available');}
 
   /* ---- Background proxy prewarm: prefetch proxy manifest so fallback is instant ---- */
@@ -1885,7 +1885,6 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
   /* ---- Auto-fallback Mid-Playback (stall detection) ---- */
   var stallTimer=null;
   var isStalling=false;
-  var stallCheckStart=0;
   var hasPlayed=false;
   video.addEventListener('timeupdate',function(){
     lastProgress=Date.now();

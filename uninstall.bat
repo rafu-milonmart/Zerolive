@@ -23,10 +23,10 @@ if exist "%USERPROFILE%\Desktop\ZeroLive Uninstall.lnk" (
     del "%USERPROFILE%\Desktop\ZeroLive Uninstall.lnk" >nul 2>&1
 )
 
-REM Remove install directory
+REM Remove install directory (deferred so the bat file is not locked)
 echo Removing %INSTALL_DIR%...
 if exist "%INSTALL_DIR%" (
-    rmdir /S /Q "%INSTALL_DIR%" >nul 2>&1
+    start /b cmd /c "timeout /t 1 /nobreak >nul && rmdir /S /Q "%INSTALL_DIR%""
 )
 
 echo.
