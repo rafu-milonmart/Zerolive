@@ -814,14 +814,15 @@ def _pb_cached(slug):
     # Always try upstream stream resolution (fails safely for non-upstream slugs)
     upstream_streams = []
     is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_sonyliv')
-    try:
-        servers = _fetch_playback(slug)
-        if servers:
-            r = _decrypt(servers[0]['enc'], str(servers[0]['bucket']))
-            if r and 'streams' in r:
-                upstream_streams = r['streams']
-    except Exception:
-        pass
+    if not is_new_source:
+        try:
+            servers = _fetch_playback(slug)
+            if servers:
+                r = _decrypt(servers[0]['enc'], str(servers[0]['bucket']))
+                if r and 'streams' in r:
+                    upstream_streams = r['streams']
+        except Exception:
+            pass
     # FanCode: synthetic stream from direct HLS URL
     fc_streams = []
     if ev.get('is_fancode'):
@@ -1334,6 +1335,8 @@ def _hls_rewrite_proxy(body, base_url, slug, idx, referer=''):
 
 def _proxy_fetch(url, ua, ref='', timeout=10):
     hdrs = {'Accept': '*/*'}
+    if ua:
+        hdrs['User-Agent'] = ua
     if ref:
         hdrs['Referer'] = ref
         if '://' in ref:
@@ -1355,7 +1358,7 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
             r = _media_get(url, headers=hdrs, timeout=timeout)
             if r.status_code == 200:
                 return r.status_code, r.content, r.headers.get('content-type', '')
-            _log.warning('proxy_fetch attempt %d: %s -> HTTP %d', attempt+1, url[:80], r.status_code)
+            _log.warning('proxy_fetch attempt %d: %s -> HTTP %d resp=%s', attempt+1, url[:80], r.status_code, r.text[:200] if r.text else '')
         except Exception as e:
             _log.warning('proxy_fetch attempt %d: %s -> %s', attempt+1, url[:80], e)
     return 0, b'', ''
