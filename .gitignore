@@ -5,6 +5,7 @@ __pycache__/
 *.bat
 !Zero_live.bat
 !uninstall.bat
+!ZeroLive_Install.bat
 version.txt
 logs/
 default_theme.txt
