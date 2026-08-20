@@ -151,7 +151,7 @@ def _fetch_fancode():
                     'stream_url': chosen,
                     'stream_type': 'hls',
                     'user_agent': ua,
-                    'referer': '',
+                    'referer': 'https://www.fancode.com/',
                     'source': 'FanCode',
                     'needs_proxy': True,
                 })
@@ -827,7 +827,7 @@ def _pb_cached(slug):
     if ev.get('is_fancode'):
         stream_url = ev.get('fancode_stream_url', '')
         if stream_url:
-            s = {'stream_url': stream_url, 'stream_type': 'hls', 'user_agent': ev.get('fancode_ua') or _UA_MOBILE, 'referer': '', 'source': 'FanCode', 'needs_proxy': True}
+            s = {'stream_url': stream_url, 'stream_type': 'hls', 'user_agent': ev.get('fancode_ua') or _UA_MOBILE, 'referer': 'https://www.fancode.com/', 'source': 'FanCode', 'needs_proxy': True}
             if ev.get('fancode_drm_kid'):
                 s['drm_kid'] = ev['fancode_drm_kid']
                 s['drm_key'] = ev['fancode_drm_key']
@@ -1339,7 +1339,10 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
         if '://' in ref:
             hdrs['Origin'] = ref.rsplit('/', 1)[0]
     else:
-        if 'akamaized.net' in url or 'tapmad' in url.lower():
+        if 'fancode.com' in url:
+            hdrs['Referer'] = 'https://www.fancode.com/'
+            hdrs['Origin'] = 'https://www.fancode.com'
+        elif 'akamaized.net' in url or 'tapmad' in url.lower():
             hdrs['Referer'] = 'https://www.tapmad.com/'
             hdrs['Origin'] = 'https://www.tapmad.com'
         else:
@@ -1364,10 +1367,14 @@ def _build_seg_headers(url, ref=''):
         if '://' in ref:
             hdrs['Origin'] = ref.rsplit('/', 1)[0]
     else:
-        p = urlparse(url)
-        if p.netloc:
-            hdrs['Referer'] = f'{p.scheme}://{p.netloc}/'
-            hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
+        if 'fancode.com' in url:
+            hdrs['Referer'] = 'https://www.fancode.com/'
+            hdrs['Origin'] = 'https://www.fancode.com'
+        else:
+            p = urlparse(url)
+            if p.netloc:
+                hdrs['Referer'] = f'{p.scheme}://{p.netloc}/'
+                hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
     return hdrs
 
 @app.route('/proxy/hls/seg/')
@@ -1465,7 +1472,9 @@ def proxy_hls(slug, idx):
     if not p.netloc:
         target = urljoin(_clean_url(s['stream_url'][:s['stream_url'].rfind('/') + 1]), target)
     ref = request.args.get('referer', '') or s.get('referer', '')
-    if not ref and ('akamaized.net' in target or 'tapmad' in target.lower()):
+    if not ref and 'fancode.com' in target:
+        ref = 'https://www.fancode.com/'
+    elif not ref and ('akamaized.net' in target or 'tapmad' in target.lower()):
         ref = 'https://www.tapmad.com/'
     ua = request.args.get('user_agent', '') or s.get('user_agent', '') or _UA_MOBILE
     _log.debug('proxy_hls: slug=%s idx=%d target=%s ref=%s rewrite=%s', slug, idx, target[:80], ref[:40] if ref else '-', rewrite)
@@ -1514,8 +1523,11 @@ def proxy_dash_seg(slug, idx, seg_path):
     ua = s.get('user_agent', '') or _UA_MOBILE
     ref = s.get('referer', '') or ''
     if not ref:
-        p = urlparse(base_url)
-        ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
+        if 'fancode.com' in base_url:
+            ref = 'https://www.fancode.com/'
+        else:
+            p = urlparse(base_url)
+            ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
     code, body, ct = _proxy_fetch(target, ua, ref, 10)
     if code == 200:
         return Response(body, content_type=ct or 'application/octet-stream')
@@ -1538,8 +1550,11 @@ def proxy_manifest(slug, idx):
     ua = s.get('user_agent', '') or _UA_MOBILE
     ref = s.get('referer', '') or ''
     if not ref:
-        p = urlparse(url)
-        ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
+        if 'fancode.com' in url:
+            ref = 'https://www.fancode.com/'
+        else:
+            p = urlparse(url)
+            ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
     for attempt in range(3):
         try:
             hdrs = {'Accept': '*/*'}
