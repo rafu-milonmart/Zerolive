@@ -86,7 +86,7 @@ if exist "!DEST!\requirements.txt" (
 
 rem ---- 5. Version -------------------------------------------------------
 echo [6/7] Writing version...
-"!PYEXE!" -c "import urllib.request,json;print(json.load(urllib.request.urlopen('!REPO_API!/commits/master',timeout=10))['sha'])" > "%TEMP%\zerolive_install\sha.txt" 2>nul
+"!PYEXE!" -c "import urllib.request,json;req=urllib.request.Request('!REPO_API!/commits/master',headers={'User-Agent':'ZeroLive/1.0'});print(json.load(urllib.request.urlopen(req,timeout=10))['sha'])" > "%TEMP%\zerolive_install\sha.txt" 2>nul
 set /p LATEST_SHA=<"%TEMP%\zerolive_install\sha.txt"
 if defined LATEST_SHA ( echo !LATEST_SHA!> "!DEST!\version.txt" ) else ( echo 1.0.0> "!DEST!\version.txt" )
 

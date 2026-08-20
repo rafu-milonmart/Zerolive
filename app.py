@@ -114,7 +114,7 @@ def _decode_hex_m3u8(hexstr):
 def _fetch_fancode():
     """Fetch FanCode events and normalize into upstream event format."""
     try:
-        raw = urllib.request.urlopen(FC_SOURCE, timeout=15).read().decode('utf-8')
+        raw = urllib.request.urlopen(urllib.request.Request(FC_SOURCE, headers={'User-Agent': 'ZeroLive/1.0'}), timeout=15).read().decode('utf-8')
         data = json.loads(raw)
         items = data.get('matches', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         if not items:
@@ -199,7 +199,7 @@ SONYLIV_SOURCE = 'https://raw.githubusercontent.com/srhady/SonyLiv/main/sonyliv_
 def _fetch_sonyliv():
     """Fetch SonyLiv live matches — direct HLS URLs, no scraping needed."""
     try:
-        raw = urllib.request.urlopen(SONYLIV_SOURCE, timeout=15).read().decode('utf-8')
+        raw = urllib.request.urlopen(urllib.request.Request(SONYLIV_SOURCE, headers={'User-Agent': 'ZeroLive/1.0'}), timeout=15).read().decode('utf-8')
         data = json.loads(raw)
         items = data.get('live_matches', []) if isinstance(data, dict) else []
         if not items:
@@ -452,7 +452,7 @@ def _prefetch_stream_proxy(slug, idx, s, warm_segments=True, min_age=0):
 def _fetch_tapmad():
     """Fetch TapMad events and normalize."""
     try:
-        raw = urllib.request.urlopen(TAPMAD_SOURCE, timeout=10).read().decode('utf-8')
+        raw = urllib.request.urlopen(urllib.request.Request(TAPMAD_SOURCE, headers={'User-Agent': 'ZeroLive/1.0'}), timeout=10).read().decode('utf-8')
         data = json.loads(raw)
         items = data.get('Matches', []) if isinstance(data, dict) else []
         if not items:
@@ -680,7 +680,7 @@ def _parse_iptv_events():
                     with open(path, 'r', encoding='utf-8') as f:
                         raw = f.read()
             elif m3u_url.startswith(('http://', 'https://')):
-                raw = urllib.request.urlopen(m3u_url, timeout=30).read().decode('utf-8')
+                raw = urllib.request.urlopen(urllib.request.Request(m3u_url, headers={'User-Agent': 'ZeroLive/1.0'}), timeout=30).read().decode('utf-8')
             else:
                 if os.path.exists(m3u_url):
                     with open(m3u_url, 'r', encoding='utf-8') as f:
