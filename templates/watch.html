@@ -956,7 +956,6 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
       <div class="vs">VS</div>
       <div class="match-meta">
         {% if event.league %}<div class="league">{{ event.league }}</div>{% endif %}
-        {% if event.is_fancode %}<span style="display:inline-block;background:#9333ea;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">FANCODE</span>{% endif %}
         {% if event.is_tapmad %}<span style="display:inline-block;background:#16a34a;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">TAPMAD</span>{% endif %}
 
         {% if event.is_sonyliv %}<span style="display:inline-block;background:#6366f1;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.5px;margin-top:4px">SONYLIV</span>{% endif %}
@@ -1030,7 +1029,6 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
   var qualityRow = document.getElementById('qualityRow');
   var streams = {{ streams | tojson }};
   var slug = '{{ slug }}';
-  var isFancode = slug.indexOf('fc_') === 0;
   var isTapmad = slug.indexOf('tm_') === 0;
   var hlsCfg = {enableWorker:true,maxBufferLength:90,maxMaxBufferLength:360,backbufferLength:60,maxBufferHole:0.6,maxStarvationDelay:8,liveSyncDuration:8,liveMaxLatencyDuration:60,startLevel:-1,liveDurationInfinity:true,lowLatencyMode:true,startFragPrefetch:true,fragLoadingMaxRetry:8,fragLoadingRetryDelay:200,fragLoadingMaxRetryTimeout:40000,levelLoadingTimeOut:15000,manifestLoadingTimeOut:15000,abrEwmaDefaultEstimate:5000000,nudgeMaxRetry:6,maxFragLookUpTolerance:0.25};
   if(isTapmad){hlsCfg.liveSyncDuration=5;hlsCfg.liveMaxLatencyDuration=25;hlsCfg.backbufferLength=30;hlsCfg.maxBufferLength=60;}
@@ -1581,7 +1579,7 @@ main{max-width:1200px;margin:0 auto;padding:16px 20px 20px}
         if(typeof Hls==='undefined'){showPlaceholder('Hls.js failed to load.');spinner.classList.add('hidden');return;}
         if(Hls.isSupported()){
           showVideo();
-          var needsProxy=isFancode||(stream&&stream.needs_proxy);
+          var needsProxy=(stream&&stream.needs_proxy);
           if(needsProxy){
             L('HLS: proxy stream, using proxy+rewrite');
             var phlsUrl='/proxy/hls/'+encodeURIComponent(slug)+'/'+idx+'/?rewrite=1';

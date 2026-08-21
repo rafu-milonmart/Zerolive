@@ -116,7 +116,7 @@ Open these URLs in VLC or any media player on any device on your local network.
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `/api/events` | GET | All live events (upstream + FanCode + TapMad) |
+| `/api/events` | GET | All live events (upstream + TapMad) |
 | `/api/version` | GET | Current version (commit SHA) |
 | `/api/default-theme` | GET | Default theme from installer |
 | `/api/custom-m3u` | GET/POST/DELETE | Custom M3U name CRUD |
@@ -143,7 +143,7 @@ User Browser  ←→  ZeroLive Server (Flask)  ←→  Upstream API (Sportzfy)
 
 ### Deduplication & merge
 
-Events from multiple sources (upstream, FanCode, TapMad) are merged by fuzzy team-name matching. When the same match appears in multiple sources, streams from all sources are combined into a single event card. This gives you fallback options if one source goes down.
+Events from multiple sources (upstream, TapMad) are merged by fuzzy team-name matching. When the same match appears in multiple sources, streams from all sources are combined into a single event card. This gives you fallback options if one source goes down.
 
 ---
 

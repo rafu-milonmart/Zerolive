@@ -95,101 +95,13 @@ def _clean_url(url):
         return url[:url.index('|')]
     return url
 
-def _decode_hex_m3u8(hexstr):
-    """Decode a hex-encoded M3U8 master playlist into its variant stream URLs."""
-    if not hexstr:
-        return []
-    try:
-        text = bytes.fromhex(hexstr).decode('utf-8', errors='ignore')
-    except Exception:
-        return []
-    urls = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line and not line.startswith('#'):
-            urls.append(line)
-    return urls
-
-
-def _fetch_fancode():
-    """Fetch FanCode events and normalize into upstream event format."""
-    try:
-        raw = urllib.request.urlopen(urllib.request.Request(FC_SOURCE, headers={'User-Agent': 'ZeroLive/1.0'}), timeout=15).read().decode('utf-8')
-        data = json.loads(raw)
-        items = data.get('matches', []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        if not items:
-            return []
-    except Exception as e:
-        _log.warning('FanCode fetch failed: %s', e)
-        return []
-    _bad_team = re.compile(r'^(Day \d|World Feed|Court \d|Feed \d|Coverage)', re.IGNORECASE)
-    events = []
-    for item in items:
-        mid = item.get('match_id', '')
-        if not mid:
-            continue
-        slug = f'fc_{mid}'
-        t1 = item.get('team_1', 'TBD')
-        t2 = item.get('team_2', 'TBD')
-        if _bad_team.match(str(t1)) or _bad_team.match(str(t2)):
-            t1 = item.get('event_name', t1)
-            t2 = item.get('event_name', t2)
-        status = (item.get('status') or '').upper()
-        ua = item.get('user-agent') or _UA_MOBILE
-        primary = (item.get('dai_url') or '').strip() or (item.get('adfree_url') or '').strip()
-        # CDN fallbacks from hex-encoded master playlists — highest variant each
-        fallbacks = []
-        seen = set()
-        for hexkey in ('google_m3u8_hex', 'akamai_m3u8_hex'):
-            variants = _decode_hex_m3u8(item.get(hexkey, ''))
-            if not variants:
-                continue
-            chosen = variants[-1]
-            if chosen and chosen not in seen and chosen != primary:
-                seen.add(chosen)
-                fallbacks.append({
-                    'stream_url': chosen,
-                    'stream_type': 'hls',
-                    'user_agent': ua,
-                    'referer': 'https://www.fancode.com/',
-                    'source': 'FanCode',
-                    'needs_proxy': True,
-                })
-        if not primary and fallbacks:
-            primary = fallbacks[0]['stream_url']
-        ev = {
-            'id': slug,
-            'enc_parent': slug,
-            'parent': slug,
-            'team_a_name': t1,
-            'team_b_name': t2,
-            'team_a_logo': item.get('src', ''),
-            'team_b_logo': '',
-            'sport': item.get('event_category', 'Sports'),
-            'league': item.get('event_name', '') or 'FanCode',
-            'title': item.get('event_name', f'{t1} vs {t2}'),
-            'status': status,
-            'is_fancode': True,
-            'is_live': 1 if status in ('LIVE', 'IN PLAY', 'IN-PLAY', 'PLAYING') else 0,
-            'fancode_stream_url': primary,
-            'fancode_ua': ua,
-            'fancode_language': '',
-        }
-        if fallbacks:
-            ev['streams'] = fallbacks
-        events.append(ev)
-    return events
-
 _EV_TTL = 15
 _PB_TTL = 30
 _M3U_TTL = 30
-_FC_TTL = 120
 _TM_TTL = 120
 _SL_TTL = 120
 
-FC_SOURCE = 'https://raw.githubusercontent.com/IPTVFlixBD/Fancode-BD/refs/heads/main/data.json'
 TAPMAD_SOURCE = 'https://raw.githubusercontent.com/srhady/tapmad-bd/refs/heads/main/tapmad_bd.json'
-_fc_cache = {}
 _tm_cache = {}
 _sl_cache = {}
 
@@ -291,7 +203,7 @@ _seg_inflight_lock = threading.Lock()
 
 def _warm_slug_cache(events):
     """Populate _slug_streams_cache for events that already have inline streams
-    (FanCode, TapMad, SonyLiv, SM Sports, IPTV). This avoids scanning all events
+    (TapMad, SonyLiv, SM Sports, IPTV). This avoids scanning all events
     on every _resolve_one / _pb_cached call for these sources."""
     now = time.time()
     for ev in events:
@@ -749,18 +661,12 @@ def _dedup_merge(all_events):
                 existing['team_a_logo'] = ev['team_a_logo']
             if not existing.get('team_b_logo') and ev.get('team_b_logo'):
                 existing['team_b_logo'] = ev['team_b_logo']
-            for flag in ('is_fancode', 'is_tapmad', 'is_sonyliv'):
+            for flag in ('is_tapmad', 'is_sonyliv'):
                 if ev.get(flag):
                     existing[flag] = True
-            # Copy FanCode stream data into merged event
-            if ev.get('is_fancode') and ev.get('fancode_stream_url'):
-                existing['fancode_stream_url'] = ev['fancode_stream_url']
-            for k in ('fancode_drm_kid', 'fancode_drm_key', 'fancode_language', 'fancode_ua'):
-                if ev.get(k) and not existing.get(k):
-                    existing[k] = ev[k]
             # If upstream event merged into a new-source event, swap key to
             # upstream slug so _pb_cached() can resolve upstream streams.
-            is_upstream_merge = (not ev.get('is_fancode') and not ev.get('is_tapmad'))
+            is_upstream_merge = (not ev.get('is_tapmad'))
             if is_upstream_merge and matched_key != key:
                 ev_id = ev.get('enc_parent') or ev.get('parent') or ev.get('id')
                 if ev_id and ev_id != matched_key:
@@ -793,7 +699,7 @@ def _pb_cached(slug):
     if hit and now - hit[0] < _PB_TTL:
         return hit[1]
     # Fast path for non-upstream slugs: check slug_streams_cache (O(1))
-    if slug.startswith(('fc_', 'iptv_', 'sl_', 'sm_', 'm3u_')):
+    if slug.startswith(('iptv_', 'sl_', 'sm_', 'm3u_')):
         ss_hit = _slug_streams_cache.get(slug)
         if ss_hit and now - ss_hit[0] < _SLUG_STREAMS_TTL:
             _pb_cache[slug] = ss_hit
@@ -813,7 +719,7 @@ def _pb_cached(slug):
         return []
     # Always try upstream stream resolution (fails safely for non-upstream slugs)
     upstream_streams = []
-    is_new_source = ev.get('is_fancode') or ev.get('is_tapmad') or ev.get('is_sonyliv')
+    is_new_source = ev.get('is_tapmad') or ev.get('is_sonyliv')
     if not is_new_source:
         try:
             servers = _fetch_playback(slug)
@@ -823,19 +729,9 @@ def _pb_cached(slug):
                     upstream_streams = r['streams']
         except Exception:
             pass
-    # FanCode: synthetic stream from direct HLS URL
-    fc_streams = []
-    if ev.get('is_fancode'):
-        stream_url = ev.get('fancode_stream_url', '')
-        if stream_url:
-            s = {'stream_url': stream_url, 'stream_type': 'hls', 'user_agent': ev.get('fancode_ua') or _UA_MOBILE, 'referer': 'https://www.fancode.com/', 'source': 'FanCode', 'needs_proxy': True}
-            if ev.get('fancode_drm_kid'):
-                s['drm_kid'] = ev['fancode_drm_kid']
-                s['drm_key'] = ev['fancode_drm_key']
-            fc_streams = [s]
     # Extra streams from merge (TapMad)
     extra_streams = ev.get('streams', [])
-    streams = upstream_streams + fc_streams + extra_streams
+    streams = upstream_streams + extra_streams
     # Deduplicate by (source, URL) — keep one per source for fallback
     seen = set()
     unique = []
@@ -950,12 +846,6 @@ def _resolve_one(slug):
             u = _clean_url(s.get('stream_url', ''))
             if u:
                 return u
-    # FanCode: direct HLS URL, no decryption needed
-    if slug.startswith('fc_'):
-        for e in _get_events():
-            if (e.get('enc_parent') or e.get('parent') or e.get('id')) == slug:
-                return e.get('fancode_stream_url') or None
-        return None
     # IPTV / SonyLiv / SM Sports: direct HLS URL, no upstream (handles cold cache)
     if slug.startswith(('iptv_', 'sl_', 'sm_', 'm3u_')):
         inline = _lookup_streams(slug)
@@ -1010,10 +900,8 @@ def _fetch_events():
 def _get_events():
     sources = [
         ('events',  _EV_TTL,     _fetch_events,   _ev_cache),
-        ('fancode', _FC_TTL,     _fetch_fancode,   _fc_cache),
         ('tapmad',  _TM_TTL,     _fetch_tapmad,    _tm_cache),
         ('sonyliv',  _SL_TTL,    _fetch_sonyliv,   _sl_cache),
-
     ]
     futs = {_POOL.submit(_cached, *s): s[0] for s in sources}
     results = {}
@@ -1230,7 +1118,7 @@ def api_custom_m3u():
 
 @app.route('/api/events')
 def api_events():
-    """Return all events (upstream + FanCode + TapMad) merged and deduped."""
+    """Return all events (upstream + TapMad) merged and deduped."""
     return jsonify({'ok': True, 'events': _get_events()})
 
 @app.route('/api/tv-live')
@@ -1342,10 +1230,7 @@ def _proxy_fetch(url, ua, ref='', timeout=10):
         if '://' in ref:
             hdrs['Origin'] = ref.rsplit('/', 1)[0]
     else:
-        if 'fancode.com' in url:
-            hdrs['Referer'] = 'https://www.fancode.com/'
-            hdrs['Origin'] = 'https://www.fancode.com'
-        elif 'akamaized.net' in url or 'tapmad' in url.lower():
+        if 'akamaized.net' in url or 'tapmad' in url.lower():
             hdrs['Referer'] = 'https://www.tapmad.com/'
             hdrs['Origin'] = 'https://www.tapmad.com'
         else:
@@ -1370,14 +1255,10 @@ def _build_seg_headers(url, ref=''):
         if '://' in ref:
             hdrs['Origin'] = ref.rsplit('/', 1)[0]
     else:
-        if 'fancode.com' in url:
-            hdrs['Referer'] = 'https://www.fancode.com/'
-            hdrs['Origin'] = 'https://www.fancode.com'
-        else:
-            p = urlparse(url)
-            if p.netloc:
-                hdrs['Referer'] = f'{p.scheme}://{p.netloc}/'
-                hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
+        p = urlparse(url)
+        if p.netloc:
+            hdrs['Referer'] = f'{p.scheme}://{p.netloc}/'
+            hdrs['Origin'] = f'{p.scheme}://{p.netloc}'
     return hdrs
 
 @app.route('/proxy/hls/seg/')
@@ -1475,9 +1356,7 @@ def proxy_hls(slug, idx):
     if not p.netloc:
         target = urljoin(_clean_url(s['stream_url'][:s['stream_url'].rfind('/') + 1]), target)
     ref = request.args.get('referer', '') or s.get('referer', '')
-    if not ref and 'fancode.com' in target:
-        ref = 'https://www.fancode.com/'
-    elif not ref and ('akamaized.net' in target or 'tapmad' in target.lower()):
+    if not ref and ('akamaized.net' in target or 'tapmad' in target.lower()):
         ref = 'https://www.tapmad.com/'
     ua = request.args.get('user_agent', '') or s.get('user_agent', '') or _UA_MOBILE
     _log.debug('proxy_hls: slug=%s idx=%d target=%s ref=%s rewrite=%s', slug, idx, target[:80], ref[:40] if ref else '-', rewrite)
@@ -1526,11 +1405,8 @@ def proxy_dash_seg(slug, idx, seg_path):
     ua = s.get('user_agent', '') or _UA_MOBILE
     ref = s.get('referer', '') or ''
     if not ref:
-        if 'fancode.com' in base_url:
-            ref = 'https://www.fancode.com/'
-        else:
-            p = urlparse(base_url)
-            ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
+        p = urlparse(base_url)
+        ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
     code, body, ct = _proxy_fetch(target, ua, ref, 10)
     if code == 200:
         return Response(body, content_type=ct or 'application/octet-stream')
@@ -1553,11 +1429,8 @@ def proxy_manifest(slug, idx):
     ua = s.get('user_agent', '') or _UA_MOBILE
     ref = s.get('referer', '') or ''
     if not ref:
-        if 'fancode.com' in url:
-            ref = 'https://www.fancode.com/'
-        else:
-            p = urlparse(url)
-            ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
+        p = urlparse(url)
+        ref = f'{p.scheme}://{p.netloc}/' if p.netloc else ''
     for attempt in range(3):
         try:
             hdrs = {'Accept': '*/*'}
